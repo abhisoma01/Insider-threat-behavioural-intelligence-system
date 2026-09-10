@@ -100,8 +100,11 @@ function DashboardLayout() {
   const [employeesError, setEmployeesError] = useState(null);
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(false);
   const [alertsError, setAlertsError] = useState(null);
+  const [liveThreatVectors, setLiveThreatVectors] = useState(null);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState(null);
 
-  // Backend connectivity & live intelligence synchronization (Phase 9.4)
+  // Backend connectivity & live intelligence synchronization (Phase 9.5)
   useEffect(() => {
     let isMounted = true;
 
@@ -113,10 +116,16 @@ function DashboardLayout() {
       if (health.isOnline) {
         setIsLoadingEmployees(true);
         setIsLoadingAlerts(true);
+        setIsLoadingAnalytics(true);
         try {
           const empPromise = api.getEmployees({ page_size: 100 });
           const alertPromise = api.getAlerts();
-          const [empRes, alertRes] = await Promise.allSettled([empPromise, alertPromise]);
+          const vectorsPromise = api.getThreatVectors();
+          const [empRes, alertRes, vectorsRes] = await Promise.allSettled([
+            empPromise,
+            alertPromise,
+            vectorsPromise
+          ]);
 
           if (
             isMounted &&
@@ -143,10 +152,19 @@ function DashboardLayout() {
             console.warn('FastAPI alerts fetch failed, retaining baseline data:', alertRes.reason);
             if (isMounted) setAlertsError(alertRes.reason?.message || 'Failed to sync live alerts');
           }
+
+          if (isMounted && vectorsRes.status === 'fulfilled' && Array.isArray(vectorsRes.value)) {
+            setLiveThreatVectors(vectorsRes.value);
+            setAnalyticsError(null);
+          } else if (vectorsRes.status === 'rejected') {
+            console.warn('FastAPI threat vectors fetch failed:', vectorsRes.reason);
+            if (isMounted) setAnalyticsError(vectorsRes.reason?.message || 'Failed to sync threat vectors');
+          }
         } finally {
           if (isMounted) {
             setIsLoadingEmployees(false);
             setIsLoadingAlerts(false);
+            setIsLoadingAnalytics(false);
           }
         }
       }
@@ -782,7 +800,13 @@ function DashboardLayout() {
         {/* 3. RISK ANALYSIS VIEW                             */}
         {/* ================================================= */}
         {activeTab === 'Risk Analysis' && (
-          <RiskAnalysisPage employees={employees} alerts={alerts} />
+          <RiskAnalysisPage
+            employees={employees}
+            alerts={alerts}
+            threatVectors={liveThreatVectors}
+            isLoading={isLoadingAnalytics}
+            error={analyticsError}
+          />
         )}
 
         {/* ================================================= */}
@@ -802,7 +826,13 @@ function DashboardLayout() {
         {/* 5. ANALYTICS & REPORTS VIEW                      */}
         {/* ================================================= */}
         {activeTab === 'Analytics' && (
-          <AnalyticsPage employees={employees} alerts={alerts} />
+          <AnalyticsPage
+            employees={employees}
+            alerts={alerts}
+            threatVectors={liveThreatVectors}
+            isLoading={isLoadingAnalytics}
+            error={analyticsError}
+          />
         )}
 
         {/* ================================================= */}

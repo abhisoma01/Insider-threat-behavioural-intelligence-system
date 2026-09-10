@@ -243,6 +243,30 @@ export const api = {
       body: { status: backendStatus }
     });
     return normalizeAlert(data);
+  },
+
+  // ================= Behavioral Risk & Analytics Endpoints =================
+
+  /**
+   * Retrieves high-level composite threat indicators and workforce risk tier distribution.
+   */
+  getRiskOverview: async () => {
+    return await request('/api/v1/risk/overview');
+  },
+
+  /**
+   * Retrieves longitudinal time-series threat score trajectory for the selected timeframe.
+   * @param {string} timeframe - '7d' | '30d' | '90d'
+   */
+  getRiskTrajectory: async (timeframe = '30d') => {
+    return await request(`/api/v1/risk/trajectory?timeframe=${timeframe}`);
+  },
+
+  /**
+   * Retrieves threat category benchmarks and observed frequencies.
+   */
+  getThreatVectors: async () => {
+    return await request('/api/v1/risk/threat-vectors');
   }
 };
 

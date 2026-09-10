@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -29,6 +29,7 @@ import {
 
 import { useTheme } from '../context/ThemeContext';
 import RiskBadge from '../components/common/RiskBadge';
+import api from '../services/api';
 import {
   trajectory7d,
   trajectory30d,
@@ -36,19 +37,46 @@ import {
   threatVectorsBenchmark
 } from '../data/mockRiskAnalytics';
 
-export default function RiskAnalysisPage({ employees = [], alerts = [] }) {
+export default function RiskAnalysisPage({
+  employees = [],
+  alerts = [],
+  threatVectors = null,
+  isLoading = false,
+  error = null
+}) {
   const { theme } = useTheme();
   const navigate = useNavigate();
 
   // Timeframe selector state ('7d' | '30d' | '90d')
   const [timeframe, setTimeframe] = useState('30d');
+  const [liveTrajectory, setLiveTrajectory] = useState(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+    api.getRiskTrajectory(timeframe)
+      .then((data) => {
+        if (isCurrent && Array.isArray(data) && data.length > 0) {
+          setLiveTrajectory(data);
+        }
+      })
+      .catch((err) => {
+        console.warn('Live risk trajectory fallback to baseline:', err);
+        if (isCurrent) setLiveTrajectory(null);
+      });
+    return () => {
+      isCurrent = false;
+    };
+  }, [timeframe]);
 
   // Selected trajectory dataset based on timeframe
-  const trajectoryData = useMemo(() => {
+  const fallbackTrajectory = useMemo(() => {
     if (timeframe === '7d') return trajectory7d;
     if (timeframe === '90d') return trajectory90d;
     return trajectory30d;
   }, [timeframe]);
+
+  const trajectoryData = liveTrajectory || fallbackTrajectory;
+  const activeThreatVectors = (threatVectors && threatVectors.length > 0) ? threatVectors : threatVectorsBenchmark;
 
   // Derived metrics from active employees state
   const metrics = useMemo(() => {
@@ -152,6 +180,35 @@ export default function RiskAnalysisPage({ employees = [], alerts = [] }) {
             <h1 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: theme.textPrimary }}>
               Enterprise Risk & Behavioral Analytics
             </h1>
+            {isLoading ? (
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                  color: theme.primary,
+                  border: `1px solid ${theme.primary}33`
+                }}
+              >
+                Syncing Telemetry...
+              </span>
+            ) : liveTrajectory ? (
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                  color: '#10b981',
+                  border: '1px solid rgba(16, 185, 129, 0.3)'
+                }}
+              >
+                Live Backend
+              </span>
+            ) : null}
           </div>
           <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: theme.textSecondary }}>
             Longitudinal threat modeling, anomaly cluster distribution, and behavioral vector baselines.
@@ -547,7 +604,7 @@ export default function RiskAnalysisPage({ employees = [], alerts = [] }) {
           <div style={{ width: '100%', height: '260px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={threatVectorsBenchmark}
+                data={activeThreatVectors}
                 layout="vertical"
                 margin={{ top: 10, right: 20, left: 30, bottom: 0 }}
               >

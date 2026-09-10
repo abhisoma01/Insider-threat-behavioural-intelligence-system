@@ -113,6 +113,28 @@ def test_endpoints():
     assert len(recent_res.json()) >= 2
     print(f"[PASS] GET /api/v1/activity/recent ({len(recent_res.json())} logs retrieved)")
 
+    # 11. Risk Overview
+    risk_res = client.get("/api/v1/risk/overview")
+    assert risk_res.status_code == 200, f"Risk overview failed: {risk_res.text}"
+    risk_data = risk_res.json()
+    assert "compositeRiskScore" in risk_data
+    assert "distribution" in risk_data
+    print(f"[PASS] GET /api/v1/risk/overview (Score: {risk_data['compositeRiskScore']}, Tier: {risk_data['riskTier']})")
+
+    # 12. Risk Trajectory
+    traj_res = client.get("/api/v1/risk/trajectory?timeframe=30d")
+    assert traj_res.status_code == 200, f"Risk trajectory failed: {traj_res.text}"
+    traj_data = traj_res.json()
+    assert len(traj_data) > 0
+    print(f"[PASS] GET /api/v1/risk/trajectory ({len(traj_data)} trajectory points retrieved)")
+
+    # 13. Threat Vectors
+    vectors_res = client.get("/api/v1/risk/threat-vectors")
+    assert vectors_res.status_code == 200, f"Threat vectors failed: {vectors_res.text}"
+    vectors_data = vectors_res.json()
+    assert len(vectors_data) >= 5
+    print(f"[PASS] GET /api/v1/risk/threat-vectors ({len(vectors_data)} benchmarks retrieved)")
+
     print("\nALL FASTAPI BACKEND ENDPOINTS PASSED VERIFICATION WITH 100% SUCCESS!")
 
 if __name__ == "__main__":
