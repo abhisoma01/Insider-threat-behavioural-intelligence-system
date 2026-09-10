@@ -135,7 +135,59 @@ def test_endpoints():
     assert len(vectors_data) >= 5
     print(f"[PASS] GET /api/v1/risk/threat-vectors ({len(vectors_data)} benchmarks retrieved)")
 
+    # 14. Behavioral Baselines Recalculation (Phase 10)
+    recalc_res = client.post("/api/v1/behavior/recalculate-baseline", json={"window_days": 30})
+    assert recalc_res.status_code == 200, f"Recalculate baselines failed: {recalc_res.text}"
+    recalc_data = recalc_res.json()
+    assert recalc_data["profiles_updated"] >= 8
+    print(f"[PASS] POST /api/v1/behavior/recalculate-baseline ({recalc_data['profiles_updated']} profiles computed)")
+
+    # 15. Behavioral Profiles Summaries
+    profiles_res = client.get("/api/v1/behavior/profiles")
+    assert profiles_res.status_code == 200, f"Get profiles failed: {profiles_res.text}"
+    profiles_data = profiles_res.json()
+    assert len(profiles_data) >= 8
+    print(f"[PASS] GET /api/v1/behavior/profiles ({len(profiles_data)} identity profiles listed)")
+
+    # 16. Employee Detailed Behavioral Baseline Dossier
+    prof101_res = client.get("/api/v1/behavior/profiles/101")
+    assert prof101_res.status_code == 200, f"Get profile 101 failed: {prof101_res.text}"
+    p101 = prof101_res.json()
+    assert "metrics" in p101
+    assert "daily_action_count" in p101["metrics"]
+    assert "data_transfer_volume_mb" in p101["metrics"]
+    assert len(p101["habitual_workstations"]) >= 1
+    assert len(p101["habitual_ips"]) >= 1
+    print(f"[PASS] GET /api/v1/behavior/profiles/101 (Sample Size: {p101['sample_size']}, Deviation Score: {p101['current_deviation_score']})")
+
+    # 17. Behavioral Activity Deviation Evaluation
+    eval_res = client.post("/api/v1/behavior/evaluate-deviation", json={
+        "employee_id": "104",
+        "activities": [
+            {
+                "activity_type": "mass_file_download",
+                "source_ip": "192.168.6.50",
+                "workstation": "WS-LEG-014",
+                "details": {"bytes": 4800 * 1024 * 1024, "is_confidential": True}
+            },
+            {
+                "activity_type": "usb_device_mounted",
+                "source_ip": "192.168.6.50",
+                "workstation": "WS-LEG-014",
+                "details": {"device": "Kingston DataTraveler 128GB"}
+            }
+        ]
+    })
+    assert eval_res.status_code == 200, f"Evaluate deviation failed: {eval_res.text}"
+    eval_data = eval_res.json()
+    assert eval_data["composite_deviation_score"] >= 40
+    assert len(eval_data["deviation_factors"]) >= 2
+    assert any(f["feature"] == "data_transfer_volume_mb" for f in eval_data["deviation_factors"])
+    assert any(f["feature"] == "usb_device_events" for f in eval_data["deviation_factors"])
+    print(f"[PASS] POST /api/v1/behavior/evaluate-deviation (Score: {eval_data['composite_deviation_score']}, Tier: {eval_data['severity_tier']}, Factors: {len(eval_data['deviation_factors'])})")
+
     print("\nALL FASTAPI BACKEND ENDPOINTS PASSED VERIFICATION WITH 100% SUCCESS!")
 
 if __name__ == "__main__":
     test_endpoints()
+

@@ -4,11 +4,14 @@ import os
 # Add backend directory to sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from datetime import datetime, timedelta
 from app.database import engine, SessionLocal, Base
 from app.models.user import User
 from app.models.employee import Employee
 from app.models.alert import Alert
 from app.models.activity import ActivityLog
+from app.models.behavioral_profile import BehavioralProfile
+from app.services.profiling_engine import recalculate_employee_baseline
 from app.utils.security import get_password_hash
 
 
@@ -388,6 +391,155 @@ def seed_database():
             print(f"Seeded {len(alerts_data)} alerts.")
         else:
             print("Alerts already seeded.")
+
+        # 4. Seed Multi-Day Activity Logs for Behavioral Profiling
+        if db.query(ActivityLog).count() < 100:
+            print("Seeding multi-day activity log history for behavioral baselines...")
+            now = datetime.utcnow()
+            activity_entries = []
+
+            # 14-day history for all employees
+            employees = db.query(Employee).all()
+            for day_offset in range(14, 0, -1):
+                day_date = now - timedelta(days=day_offset)
+                is_weekend = day_date.weekday() >= 5
+                if is_weekend:
+                    continue  # standard baseline has no weekend activity
+
+                for emp in employees:
+                    # Normal morning authentication
+                    login_time = day_date.replace(hour=8, minute=45, second=0) + timedelta(minutes=(int(emp.id) * 3) % 40)
+                    activity_entries.append(ActivityLog(
+                        employee_id=emp.id,
+                        activity_type="login_success",
+                        source_ip=emp.ip_address,
+                        workstation=emp.workstation,
+                        timestamp=login_time,
+                        details={"auth_method": "SSO_SAML", "status": "approved"},
+                        is_anomalous=False,
+                        anomaly_score=5
+                    ))
+
+                    # Normal midday business activity
+                    action_time = day_date.replace(hour=11, minute=15, second=0) + timedelta(minutes=(int(emp.id) * 5) % 90)
+                    activity_entries.append(ActivityLog(
+                        employee_id=emp.id,
+                        activity_type="file_access",
+                        source_ip=emp.ip_address,
+                        workstation=emp.workstation,
+                        timestamp=action_time,
+                        details={"resource": f"{emp.department.lower()}_docs_portal", "mb": 4.5},
+                        is_anomalous=False,
+                        anomaly_score=5
+                    ))
+
+                    # Normal afternoon data query
+                    query_time = day_date.replace(hour=15, minute=20, second=0)
+                    activity_entries.append(ActivityLog(
+                        employee_id=emp.id,
+                        activity_type="record_query",
+                        source_ip=emp.ip_address,
+                        workstation=emp.workstation,
+                        timestamp=query_time,
+                        details={"records_viewed": 12, "mb": 2.1},
+                        is_anomalous=False,
+                        anomaly_score=5
+                    ))
+
+            # Inject recent acute anomalous incidents (past 24h) corresponding to active threat alerts:
+            # 1. John Carter (101): Off-hours brute force & foreign login
+            for i in range(5):
+                activity_entries.append(ActivityLog(
+                    employee_id="101",
+                    activity_type="failed_login",
+                    source_ip="194.26.29.4",
+                    workstation="WS-BERLIN-UNKNOWN",
+                    timestamp=now - timedelta(hours=2, minutes=45 - i * 2),
+                    details={"reason": "bad_password", "origin": "Berlin, Germany"},
+                    is_anomalous=True,
+                    anomaly_score=85
+                ))
+            activity_entries.append(ActivityLog(
+                employee_id="101",
+                activity_type="login_success",
+                source_ip="194.26.29.4",
+                workstation="WS-BERLIN-UNKNOWN",
+                timestamp=now - timedelta(hours=2, minutes=35),
+                details={"mfa_bypass_alert": True, "origin": "Berlin, Germany"},
+                is_anomalous=True,
+                anomaly_score=90
+            ))
+
+            # 2. Elena Rostova (102): Mass repository clone
+            activity_entries.append(ActivityLog(
+                employee_id="102",
+                activity_type="git_clone_mass",
+                source_ip="192.168.1.88",
+                workstation="WS-ENG-402",
+                timestamp=now - timedelta(hours=3, minutes=10),
+                details={"repos_cloned": 14, "mb": 2400.0, "is_confidential": True},
+                is_anomalous=True,
+                anomaly_score=92
+            ))
+
+            # 3. Marcus Vance (103): IAM policy modification
+            activity_entries.append(ActivityLog(
+                employee_id="103",
+                activity_type="iam_policy_modification",
+                source_ip="192.168.3.10",
+                workstation="WS-OPS-112",
+                timestamp=now - timedelta(hours=4),
+                details={"policy": "AdministratorAccess", "ticket_verified": False},
+                is_anomalous=True,
+                anomaly_score=88
+            ))
+
+            # 4. Priya Nair (104): Mass patent download & USB mount
+            activity_entries.append(ActivityLog(
+                employee_id="104",
+                activity_type="mass_file_download",
+                source_ip="192.168.6.50",
+                workstation="WS-LEG-014",
+                timestamp=now - timedelta(hours=5),
+                details={"files_count": 1420, "mb": 4800.0, "is_confidential": True},
+                is_anomalous=True,
+                anomaly_score=95
+            ))
+            activity_entries.append(ActivityLog(
+                employee_id="104",
+                activity_type="usb_device_mounted",
+                source_ip="192.168.6.50",
+                workstation="WS-LEG-014",
+                timestamp=now - timedelta(hours=4, minutes=50),
+                details={"device": "Kingston DataTraveler 128GB", "action": "mass_copy"},
+                is_anomalous=True,
+                anomaly_score=96
+            ))
+
+            # 5. Sarah Jenkins (106): Sensitive compensation export
+            activity_entries.append(ActivityLog(
+                employee_id="106",
+                activity_type="sensitive_data_export",
+                source_ip="192.168.7.20",
+                workstation="WS-HR-205",
+                timestamp=now - timedelta(hours=6),
+                details={"report": "Full_Workforce_Comp_2026.xlsx", "mb": 120.0, "is_confidential": True},
+                is_anomalous=True,
+                anomaly_score=75
+            ))
+
+            db.add_all(activity_entries)
+            db.commit()
+            print(f"Seeded {len(activity_entries)} historical activity log events.")
+        else:
+            print("Activity logs already seeded.")
+
+        # 5. Compute Behavioral Baselines
+        print("Computing empirical behavioral baselines for monitored workforce...")
+        employees = db.query(Employee).all()
+        for emp in employees:
+            prof = recalculate_employee_baseline(db, emp.id, window_days=30)
+            print(f"  - Profiled {emp.name} ({emp.id}): Sample Size={prof.sample_size}, Deviation Score={prof.current_deviation_score}")
 
         db.commit()
         print("Database initialization and seeding completed successfully!")

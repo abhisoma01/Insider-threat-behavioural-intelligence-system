@@ -267,6 +267,47 @@ export const api = {
    */
   getThreatVectors: async () => {
     return await request('/api/v1/risk/threat-vectors');
+  },
+
+  // ================= Behavioral Profiling & Baseline Endpoints =================
+
+  /**
+   * Retrieves summary profiles of all monitored identities.
+   */
+  getBehavioralProfiles: async () => {
+    return await request('/api/v1/behavior/profiles');
+  },
+
+  /**
+   * Retrieves full empirical behavioral baseline metrics and deviation factors for an employee.
+   * @param {string} employeeId
+   */
+  getBehavioralProfile: async (employeeId) => {
+    return await request(`/api/v1/behavior/profiles/${employeeId}`);
+  },
+
+  /**
+   * Triggers feature extraction and baseline calculation for an employee or all employees.
+   * @param {string|null} employeeId
+   * @param {number} windowDays
+   */
+  recalculateBaseline: async (employeeId = null, windowDays = 30) => {
+    return await request('/api/v1/behavior/recalculate-baseline', {
+      method: 'POST',
+      body: { employee_id: employeeId, window_days: windowDays }
+    });
+  },
+
+  /**
+   * Evaluates an activity batch or recent logs against an employee's established behavioral profile.
+   * @param {string} employeeId
+   * @param {Array|null} activities
+   */
+  evaluateDeviation: async (employeeId, activities = null) => {
+    return await request('/api/v1/behavior/evaluate-deviation', {
+      method: 'POST',
+      body: { employee_id: employeeId, activities: activities }
+    });
   }
 };
 

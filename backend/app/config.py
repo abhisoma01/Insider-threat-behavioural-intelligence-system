@@ -11,7 +11,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./threat_intel.db")
+    ROOT_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{os.path.join(ROOT_DIR, 'threat_intel.db').replace('\\', '/')}")
 
     # CORS configuration
     BACKEND_CORS_ORIGINS: List[str] = [
