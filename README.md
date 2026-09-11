@@ -1,70 +1,207 @@
-# Getting Started with Create React App
+# Threat AI — Enterprise Insider Threat Behavioral Intelligence Platform
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+> **An Advanced Full-Stack Cybersecurity Intelligence System with Empirical Behavioral Profiling, Role-Based Access Control (RBAC), and Real-Time Telemetry Analytics.**
 
-## Available Scripts
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI%200.115+-009688.svg?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/Frontend-React%2018-61DAFB.svg?style=flat&logo=react&logoColor=black)](https://reactjs.org)
+[![SQLAlchemy](https://img.shields.io/badge/ORM-SQLAlchemy%202.0-D71F00.svg?style=flat)](https://www.sqlalchemy.org)
+[![Tests](https://img.shields.io/badge/Tests-100%25%20PASS-success.svg?style=flat)]()
+[![Security](https://img.shields.io/badge/RBAC-JWT%20Enforced-critical.svg?style=flat)]()
 
-In the project directory, you can run:
+---
 
-### `npm start`
+## 🛡️ System Overview
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+**Threat AI** is an enterprise-grade User and Entity Behavior Analytics (UEBA) platform designed to detect, analyze, and contain insider threats across enterprise environments. Rather than relying on rigid, hardcoded rules, the system extracts multidimensional activity telemetry, builds **empirical statistical baselines** ($\mu, \sigma$) per identity, and flags anomalous behavioral drift with explainable root-cause factors.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+---
 
-### `npm test`
+## 🏛️ High-Level Architecture
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```
+                               ┌─────────────────────────────────────────┐
+                               │       React 18 Dashboard (Port 3000)    │
+                               │  - Recharts Dynamic Visualizations      │
+                               │  - Light/Dark High-Contrast Themes      │
+                               │  - Real-time Notifications Drawer       │
+                               │  - CISO Executive Report & CSV Export   │
+                               └────────────────────┬────────────────────┘
+                                                    │  JSON / Bearer Token
+                                                    ▼
+                               ┌─────────────────────────────────────────┐
+                               │       FastAPI Backend API (Port 8000)   │
+                               │  - Strict API-Level RBAC (HTTP 403)     │
+                               │  - Automatic OpenAPI / Swagger Docs     │
+                               │  - CSV Streaming Response Engine        │
+                               └───────────┬─────────────────┬───────────┘
+                                           │                 │
+                  ┌────────────────────────┴─┐             ┌─┴─────────────────────────┐
+                  ▼                          │             ▼                           ▼
+  ┌──────────────────────────────┐           │  ┌───────────────────────┐  ┌───────────────────────┐
+  │  Statistical Profiling Engine│           │  │  SQLAlchemy 2.0 ORM   │  │   Security Auditing   │
+  │  - 9 Telemetry Features      │           │  │  - Employees          │  │   - Automated System  │
+  │  - Gaussian Baselines (μ, σ) │           │  │  - Alerts             │  │     Notifications     │
+  │  - Z-Score Anomaly Detection │           │  │  - Activity Logs      │  │   - Containment Logs  │
+  │  - Habitual Clustered IPs/WS │           │  │  - Persistent Notifs  │  └───────────────────────┘
+  └──────────────────────────────┘           │  └───────────┬───────────┘
+                                             │              │
+                                             └──────────────┼────────────┐
+                                                            ▼            ▼
+                                                   ┌───────────────────────────┐
+                                                   │ SQLite Threat Intel DB    │
+                                                   │ (threat_intel.db)         │
+                                                   └───────────────────────────┘
+```
 
-### `npm run build`
+---
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## ✨ Key Enterprise Capabilities
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### 1. Empirical Behavioral Profiling & Anomaly Engine (AI/ML)
+* **Telemetry Feature Extraction:** Extracts 9 core behavioral indicators from telemetry logs:
+  * `daily_action_count`, `off_hours_activity_ratio`, `failed_login_count`
+  * `data_transfer_volume_mb`, `file_access_frequency`, `sensitive_resource_access_count`
+  * `usb_device_events`, `distinct_ip_count`, `distinct_workstation_count`
+* **Empirical Baselines:** Models habitual activity windows using Gaussian parametric distributions ($\mu, \sigma$).
+* **Z-Score Deviation Evaluation:** Calculates feature deviations ($Z = \frac{x - \mu}{\sigma}$) to detect genuine anomalies and prevent false positives.
+* **Explainability Vectors:** Every flagged incident provides plain-text, auditable explanations of why an action was anomalous.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### 2. Strict API-Level Role-Based Access Control (RBAC)
+* All sensitive backend endpoints validate signed JWT role claims and return **`HTTP 403 Forbidden`** on unauthorized access:
 
-### `npm run eject`
+| Endpoint | Operation | Authorized Roles | Unauthorized Response |
+| :--- | :--- | :--- | :---: |
+| `POST /api/v1/activity/ingest` | Ingest Telemetry Stream | `SOC Engineer`, `Administrator` | **403 Forbidden** |
+| `POST /api/v1/employees/{id}/lock` | Isolate Endpoint Credentials | `Security Manager`, `Administrator` | **403 Forbidden** |
+| `POST /api/v1/employees/{id}/reset-score` | Recalibrate Baseline Score | `Security Manager`, `Administrator` | **403 Forbidden** |
+| `POST /api/v1/behavior/recalculate-baseline`| Workforce Model Retraining | `SOC Engineer`, `Administrator` | **403 Forbidden** |
+| `PATCH /api/v1/alerts/{id}` | Alert Triage Lifecycle | `Analyst`, `Engineer`, `Manager`, `Admin`| **403 Forbidden** |
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### 3. Real Database-Backed Security Notifications
+* Notifications are persisted in a dedicated SQLite `notifications` table.
+* Operations such as account containment (`POST /lock`) and alert triage automatically emit database audit alerts.
+* Endpoints support listing unread alerts, individual read toggles, and bulk read marking.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### 4. Executive CISO Reporting & CSV Export
+* **Executive CISO Dossier (`GET /api/v1/reports/executive`):** On-demand intelligence dossier detailing workforce composite posture, department vulnerability matrices, prioritized watchlist, and remediation directives.
+* **Direct CSV Export (`GET /api/v1/reports/export/csv`):** Streams downloadable `.csv` audit trails for telemetry activity logs, workforce threat scores, or security alerts.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### 5. Dynamic Risk Trajectory & Threat Vector Analysis
+* Eliminated static mock data; daily anomaly counts and mitigation trendlines (`7d`, `30d`, `90d`) are dynamically aggregated from database records based on calendar time intervals.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+---
 
-## Learn More
+## 🚀 Quick Start Guide
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+### Prerequisites
+* **Python 3.10+**
+* **Node.js 16+** and **npm**
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### Step 1: Backend Setup
+```powershell
+# In the project root directory
+# Install Python dependencies
+pip install fastapi uvicorn sqlalchemy pydantic python-jose passlib bcrypt
 
-### Code Splitting
+# Initialize and seed database with workforce and RBAC accounts
+python backend/seed.py
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+# Start the FastAPI server
+uvicorn backend.app.main:app --reload --port 8000
+```
+* **Backend API:** `http://localhost:8000`
+* **Interactive Swagger UI:** `http://localhost:8000/docs`
 
-### Analyzing the Bundle Size
+### Step 2: Frontend Setup
+Open a second terminal window:
+```powershell
+# In the project root directory
+# Install React dependencies (first time only)
+npm install
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+# Start the React development server
+npm start
+```
+* The application will open automatically at: `http://localhost:3000`
 
-### Making a Progressive Web App
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## 🔑 Demo RBAC Test Credentials
 
-### Advanced Configuration
+All accounts are pre-seeded in the database with password: **`admin123`**
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+| Role | Email | Permissions |
+| :--- | :--- | :--- |
+| **System Administrator** | `admin@threat.ai` | Full unrestricted access across all platform capabilities |
+| **Security Manager** | `manager@threat.ai` | Account containment (`/lock`, `/reset-score`), alert triage, reports |
+| **SOC Lead Engineer** | `engineer@threat.ai` | Telemetry ingestion (`/ingest`), model retraining, alert triage |
+| **Security Analyst** | `analyst@threat.ai` | Read-only dashboards, investigation dossiers, alert triage |
 
-### Deployment
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+## 🧪 Verification & Automated Testing
 
-### `npm run build` fails to minify
+### Run Backend Automated Test Suite
+```powershell
+python backend/test_api.py
+```
+> **Result:** **100% PASS** (Verifies health, multi-role JWT logins, 403 Forbidden RBAC checks, containment actions, notifications, CISO reports, CSV downloads, dynamic trajectory, and behavioral Z-score deviations).
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+### Run Frontend Automated Test Suite
+```powershell
+npm test -- --watchAll=false
+```
+> **Result:** **100% PASS** (`PASS src/App.test.js`).
+
+### Run Production Build
+```powershell
+npm run build
+```
+> **Result:** **Compiled successfully** with zero errors.
+
+---
+
+## 📁 Repository Directory Structure
+
+```
+insider-dashboard/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/
+│   │   │   ├── activity.py          # Telemetry log ingestion & real-time monitoring
+│   │   │   ├── alerts.py            # Incident alerts triage lifecycle
+│   │   │   ├── auth.py              # JWT authentication & require_roles RBAC factory
+│   │   │   ├── behavior.py          # Behavioral profiling & baseline recalculation
+│   │   │   ├── employees.py         # Monitored identity directory & containment actions
+│   │   │   ├── notifications.py     # Database-backed notifications router
+│   │   │   ├── reports.py           # CISO executive dossier & CSV streaming exports
+│   │   │   └── risk.py              # Dynamic risk trajectory & threat vectors
+│   │   ├── models/                  # SQLAlchemy 2.0 ORM database models
+│   │   ├── schemas/                 # Pydantic v2 validation & response schemas
+│   │   ├── services/
+│   │   │   └── profiling_engine.py  # UEBA statistical feature extraction & Z-score engine
+│   │   ├── utils/
+│   │   │   └── security.py          # bcrypt password hashing & JWT token crypto
+│   │   ├── config.py                # Environment configuration
+│   │   ├── database.py              # Engine setup & DB session generator
+│   │   └── main.py                  # FastAPI application entry point
+│   ├── seed.py                      # Multi-role database seeder & 14-day telemetry generator
+│   └── test_api.py                  # Full automated integration test suite
+├── src/
+│   ├── components/                  # Reusable UI widgets, badges, navigation drawers
+│   ├── context/                     # ThemeContext (Dark/Light), AuthContext
+│   ├── data/                        # Baseline datasets & offline resilience fallbacks
+│   ├── pages/                       # Overview, Employees, Alerts, Risk Analysis, Analytics/Reports
+│   ├── services/
+│   │   └── api.js                   # Unified fetch API client with JWT bearer handling
+│   ├── App.js                       # Primary root router and state synchronization
+│   └── index.js                     # React DOM bootstrap
+├── threat_intel.db                  # Local SQLite database
+└── README.md
+```
+
+---
+
+## 🎓 Academic Defense Notes
+* **Deterministic Verification:** The test suites run 100% locally without cloud API keys or external LLM dependencies, ensuring deterministic, reproducible evaluation.
+* **Resilient Offline Architecture:** The frontend features resilient optimistic state management with automatic offline fallback, ensuring the interface remains functional even if network latency occurs.
