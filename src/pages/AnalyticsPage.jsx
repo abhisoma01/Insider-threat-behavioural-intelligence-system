@@ -10,7 +10,8 @@ import {
   ShieldAlert,
   ArrowUpRight,
   CheckCircle2,
-  Clock
+  Clock,
+  Download
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -359,46 +360,90 @@ export default function AnalyticsPage({
 
           {/* Contextual Actions */}
           {viewMode === 'analytics' ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              {['7d', '30d', '90d'].map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => setTimeframe(tf)}
-                  style={{
-                    padding: '7px 12px',
-                    borderRadius: '7px',
-                    border: `1px solid ${timeframe === tf ? theme.primary : theme.border}`,
-                    backgroundColor: timeframe === tf ? theme.primary : theme.surfaceVariant,
-                    color: timeframe === tf ? '#ffffff' : theme.textSecondary,
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {tf.toUpperCase()}
-                </button>
-              ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                {['7d', '30d', '90d'].map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => setTimeframe(tf)}
+                    style={{
+                      padding: '7px 12px',
+                      borderRadius: '7px',
+                      border: `1px solid ${timeframe === tf ? theme.primary : theme.border}`,
+                      backgroundColor: timeframe === tf ? theme.primary : theme.surfaceVariant,
+                      color: timeframe === tf ? '#ffffff' : theme.textSecondary,
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {tf.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => api.downloadReportCsv('employees').catch((e) => console.error(e))}
+                title="Export workforce risk matrix CSV"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '7px 12px',
+                  borderRadius: '7px',
+                  border: `1px solid ${theme.border}`,
+                  backgroundColor: theme.surfaceVariant,
+                  color: theme.textSecondary,
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                <Download size={13} />
+                Export CSV
+              </button>
             </div>
           ) : (
-            <button
-              onClick={handlePrint}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 16px',
-                borderRadius: '8px',
-                backgroundColor: theme.primary,
-                color: '#ffffff',
-                border: 'none',
-                fontWeight: '700',
-                fontSize: '12.5px',
-                cursor: 'pointer'
-              }}
-            >
-              <Printer size={14} />
-              Print / Export PDF
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                onClick={() => api.downloadReportCsv('activities').catch((e) => console.error(e))}
+                title="Download full database activity log CSV"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: theme.surfaceVariant,
+                  color: theme.textPrimary,
+                  border: `1px solid ${theme.border}`,
+                  fontWeight: '700',
+                  fontSize: '12.5px',
+                  cursor: 'pointer'
+                }}
+              >
+                <Download size={14} />
+                Export Telemetry CSV
+              </button>
+              <button
+                onClick={handlePrint}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: theme.primary,
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: '700',
+                  fontSize: '12.5px',
+                  cursor: 'pointer'
+                }}
+              >
+                <Printer size={14} />
+                Print / Export PDF
+              </button>
+            </div>
           )}
         </div>
       </div>

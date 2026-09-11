@@ -5,6 +5,8 @@ from app.database import get_db
 from app.models.employee import Employee
 from app.models.behavioral_profile import BehavioralProfile
 from app.models.activity import ActivityLog
+from app.models.user import User
+from app.api.v1.auth import require_roles
 from app.schemas.behavior import (
     BehavioralProfileRead,
     BehavioralProfileSummary,
@@ -79,7 +81,8 @@ def get_employee_behavioral_profile(employee_id: str, db: Session = Depends(get_
 @router.post("/recalculate-baseline", response_model=BaselineRecalculateResponse)
 def trigger_baseline_recalculation(
     payload: BaselineRecalculateRequest = BaselineRecalculateRequest(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["SOC Engineer", "Administrator"]))
 ):
     """
     Triggers feature extraction and statistical baseline generation from multi-day activity logs.

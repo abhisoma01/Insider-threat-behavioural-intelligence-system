@@ -308,8 +308,135 @@ export const api = {
       method: 'POST',
       body: { employee_id: employeeId, activities: activities }
     });
+  },
+
+  // ================= Notification Endpoints =================
+
+  /**
+   * Retrieves security notifications.
+   * @param {boolean|null} unreadOnly
+   * @param {number} limit
+   */
+  getNotifications: async (unreadOnly = false, limit = 50) => {
+    const query = unreadOnly ? `?unread_only=true&limit=${limit}` : `?limit=${limit}`;
+    const data = await request(`/api/v1/notifications${query}`);
+    const items = data?.items || (Array.isArray(data) ? data : []);
+    return items.map(normalizeNotification);
+  },
+
+  /**
+   * Marks a specific notification as read.
+   * @param {number} id
+   */
+  markNotificationRead: async (id) => {
+    return await request(`/api/v1/notifications/${id}/read`, {
+      method: 'PATCH'
+    });
+  },
+
+  /**
+   * Marks all notifications as read.
+   */
+  markAllNotificationsRead: async () => {
+    return await request('/api/v1/notifications/mark-all-read', {
+      method: 'POST'
+    });
+  },
+
+  /**
+   * Clears all notifications.
+   */
+  clearNotifications: async () => {
+    return await request('/api/v1/notifications', {
+      method: 'DELETE'
+    });
+  },
+
+  // ================= Reports & Export Endpoints =================
+
+  /**
+   * Retrieves high-level Executive CISO Intelligence Dossier.
+   */
+  getExecutiveReport: async () => {
+    return await request('/api/v1/reports/executive');
+  },
+
+  /**
+   * Retrieves comprehensive forensic identity report for an employee.
+   * @param {string} employeeId
+   */
+  getEmployeeForensicReport: async (employeeId) => {
+    return await request(`/api/v1/reports/employee/${employeeId}`);
+  },
+
+  /**
+   * Generates a downloadable forensic telemetry CSV export URL with auth token.
+   * @param {string} format - 'activities' | 'employees' | 'alerts'
+   */
+  getExportCsvUrl: (format = 'activities') => {
+    const token = tokenStorage.get();
+    return `${BASE_URL}/api/v1/reports/export/csv?format=${format}${token ? `&token=${token}` : ''}`;
+  },
+
+  /**
+   * Initiates direct CSV export download.
+   * @param {string} format
+   */
+  downloadReportCsv: async (format = 'activities') => {
+    const token = tokenStorage.get();
+    const response = await fetch(`${BASE_URL}/api/v1/reports/export/csv?format=${format}`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to export report: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `threat_ai_${format}_export_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   }
 };
+
+/**
+ * Normalizes FastAPI notification objects to frontend conventions.
+ */
+export function normalizeNotification(notif) {
+  if (!notif) return null;
+  return {
+    id: notif.id,
+    title: notif.title || 'Security Notification',
+    message: notif.message || '',
+    severity: notif.severity || 'Medium',
+    type: notif.type || 'system',
+    employeeId: notif.employee_id,
+    alertId: notif.alert_id,
+    link: notif.link,
+    read: Boolean(notif.read),
+    time: notif.created_at ? formatNotificationTime(notif.created_at) : 'Just now',
+    createdAt: notif.created_at
+  };
+}
+
+function formatNotificationTime(isoString) {
+  try {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return date.toLocaleDateString();
+  } catch {
+    return 'Recent';
+  }
+}
 
 /**
  * Normalizes FastAPI snake_case employee objects to frontend camelCase convention,

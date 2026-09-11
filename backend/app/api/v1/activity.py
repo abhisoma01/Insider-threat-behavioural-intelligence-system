@@ -5,6 +5,8 @@ from sqlalchemy import desc
 from app.database import get_db
 from app.models.activity import ActivityLog
 from app.models.employee import Employee
+from app.models.user import User
+from app.api.v1.auth import require_roles
 from app.schemas.activity import (
     ActivityLogCreate,
     ActivityLogRead,
@@ -17,7 +19,8 @@ router = APIRouter(prefix="/activity", tags=["Activity Monitoring Telemetry"])
 @router.post("/ingest", response_model=ActivityIngestResponse, status_code=status.HTTP_201_CREATED)
 def ingest_telemetry_logs(
     payload: Union[ActivityLogCreate, List[ActivityLogCreate]],
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["SOC Engineer", "Administrator"]))
 ):
     """Ingests activity logs into the telemetry stream and performs real-time heuristic anomaly tagging."""
     logs_to_insert = [payload] if isinstance(payload, ActivityLogCreate) else payload

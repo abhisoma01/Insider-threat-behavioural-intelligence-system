@@ -121,10 +121,12 @@ function DashboardLayout() {
           const empPromise = api.getEmployees({ page_size: 100 });
           const alertPromise = api.getAlerts();
           const vectorsPromise = api.getThreatVectors();
-          const [empRes, alertRes, vectorsRes] = await Promise.allSettled([
+          const notifPromise = api.getNotifications();
+          const [empRes, alertRes, vectorsRes, notifRes] = await Promise.allSettled([
             empPromise,
             alertPromise,
-            vectorsPromise
+            vectorsPromise,
+            notifPromise
           ]);
 
           if (
@@ -160,6 +162,10 @@ function DashboardLayout() {
             console.warn('FastAPI threat vectors fetch failed:', vectorsRes.reason);
             if (isMounted) setAnalyticsError(vectorsRes.reason?.message || 'Failed to sync threat vectors');
           }
+
+          if (isMounted && notifRes.status === 'fulfilled' && Array.isArray(notifRes.value) && notifRes.value.length > 0) {
+            setNotifications(notifRes.value);
+          }
         } finally {
           if (isMounted) {
             setIsLoadingEmployees(false);
@@ -193,14 +199,23 @@ function DashboardLayout() {
     setNotifications((prev) =>
       prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
     );
+    if (isBackendConnected) {
+      api.markNotificationRead(notifId).catch((err) => console.warn('Failed to mark notification read on backend', err));
+    }
   };
 
   const handleMarkAllNotificationsRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    if (isBackendConnected) {
+      api.markAllNotificationsRead().catch((err) => console.warn('Failed to mark all notifications read on backend', err));
+    }
   };
 
   const handleClearNotifications = () => {
     setNotifications([]);
+    if (isBackendConnected) {
+      api.clearNotifications().catch((err) => console.warn('Failed to clear notifications on backend', err));
+    }
   };
 
   const unreadNotificationsCount = notifications.filter((n) => !n.read).length;
@@ -223,7 +238,9 @@ function DashboardLayout() {
     setSelectedEmployee(null);
 
     if (isBackendConnected) {
-      api.lockEmployee(id).catch((err) => console.error('Failed to lock account on backend', err));
+      api.lockEmployee(id)
+        .then(() => api.getNotifications().then((fresh) => { if (Array.isArray(fresh)) setNotifications(fresh); }))
+        .catch((err) => console.error('Failed to lock account on backend', err));
     }
   };
 

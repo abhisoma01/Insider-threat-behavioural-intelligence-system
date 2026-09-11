@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, desc, asc
 from app.database import get_db
 from app.models.employee import Employee
+from app.models.user import User
+from app.api.v1.auth import require_roles
 from app.schemas.employee import (
     EmployeeRead,
     EmployeeListResponse,
@@ -83,8 +85,12 @@ def get_employee(employee_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{employee_id}/lock", response_model=ContainmentResponse)
-def lock_employee_account(employee_id: str, db: Session = Depends(get_db)):
-    """Executes immediate isolation containment directive on the identity."""
+def lock_employee_account(
+    employee_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["Security Manager", "Administrator"]))
+):
+    """Executes immediate isolation containment directive on the identity (Manager/Admin only)."""
     emp = db.query(Employee).filter(Employee.id == employee_id).first()
     if not emp:
         raise HTTPException(
@@ -95,22 +101,37 @@ def lock_employee_account(employee_id: str, db: Session = Depends(get_db)):
     emp.status = "Locked"
     emp.risk_level = "Low"
     emp.score = 0
-    emp.last_activity = "Account locked by analyst containment directive"
+    emp.last_activity = f"Account isolated by {current_user.name} ({current_user.role})"
     db.commit()
     db.refresh(emp)
+
+    from app.api.v1.notifications import create_system_notification
+    create_system_notification(
+        db=db,
+        title=f"Containment Directive: {emp.name} Isolated",
+        message=f"Account credentials isolated and active sessions revoked by {current_user.name} ({current_user.role}).",
+        severity="Critical",
+        notif_type="containment",
+        employee_id=emp.id,
+        link=f"/employees/{emp.id}"
+    )
 
     return ContainmentResponse(
         id=emp.id,
         status=emp.status,
         score=emp.score,
         risk_level=emp.risk_level,
-        message=f"Credentials for {emp.name} have been suspended and sessions isolated."
+        message=f"Credentials for {emp.name} suspended by {current_user.role}."
     )
 
 
 @router.post("/{employee_id}/reset-score", response_model=ContainmentResponse)
-def reset_employee_score(employee_id: str, db: Session = Depends(get_db)):
-    """Recalibrates behavioral threat score back to standard baseline (15 / 100)."""
+def reset_employee_score(
+    employee_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["Security Manager", "Administrator"]))
+):
+    """Recalibrates behavioral threat score back to standard baseline (Manager/Admin only)."""
     emp = db.query(Employee).filter(Employee.id == employee_id).first()
     if not emp:
         raise HTTPException(
@@ -121,7 +142,7 @@ def reset_employee_score(employee_id: str, db: Session = Depends(get_db)):
     emp.status = "Active"
     emp.risk_level = "Low"
     emp.score = 15
-    emp.last_activity = "Behavioral risk score recalibrated to baseline"
+    emp.last_activity = f"Risk score reset by {current_user.name} ({current_user.role})"
     db.commit()
     db.refresh(emp)
 
@@ -135,8 +156,12 @@ def reset_employee_score(employee_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{employee_id}/dismiss-flag", response_model=ContainmentResponse)
-def dismiss_employee_flag(employee_id: str, db: Session = Depends(get_db)):
-    """Dismisses active security flag on an employee."""
+def dismiss_employee_flag(
+    employee_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["Security Manager", "Administrator"]))
+):
+    """Dismisses active security flag on an employee (Manager/Admin only)."""
     emp = db.query(Employee).filter(Employee.id == employee_id).first()
     if not emp:
         raise HTTPException(
@@ -147,7 +172,7 @@ def dismiss_employee_flag(employee_id: str, db: Session = Depends(get_db)):
     emp.status = "Active"
     emp.risk_level = "Low"
     emp.score = min(emp.score, 20)
-    emp.last_activity = "Security flag cleared by analyst"
+    emp.last_activity = f"Security flag cleared by {current_user.name} ({current_user.role})"
     db.commit()
     db.refresh(emp)
 

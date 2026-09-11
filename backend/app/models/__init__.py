@@ -3,6 +3,8 @@ from app.models.employee import Employee
 from app.models.alert import Alert
 from app.models.activity import ActivityLog
 from app.models.behavioral_profile import BehavioralProfile
+from app.models.notification import Notification
 
-__all__ = ["User", "Employee", "Alert", "ActivityLog", "BehavioralProfile"]
+__all__ = ["User", "Employee", "Alert", "ActivityLog", "BehavioralProfile", "Notification"]
+
 

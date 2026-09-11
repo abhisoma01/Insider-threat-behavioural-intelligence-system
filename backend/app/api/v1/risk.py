@@ -1,9 +1,12 @@
 from typing import List, Dict, Any
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.database import get_db
 from app.models.employee import Employee
 from app.models.alert import Alert
+from app.models.activity import ActivityLog
 
 router = APIRouter(prefix='/risk', tags=['Behavioral Risk Telemetry and Analytics'])
 
@@ -45,67 +48,200 @@ def get_risk_trajectory(
     timeframe: str = Query('30d', pattern='^(7d|30d|90d)$'),
     db: Session = Depends(get_db)
 ) -> List[Dict[str, Any]]:
+    """
+    Dynamically computes historical risk trajectory and anomaly event velocity
+    by aggregating ActivityLog and Alert telemetry over calendar time windows.
+    """
     employees = db.query(Employee).all()
     total = len(employees)
-    base_score = round(sum(e.score or 0 for e in employees) / total) if total > 0 else 18
+    base_score = round(sum(e.score or 0 for e in employees) / total) if total > 0 else 20
+
+    # Anchor to the latest telemetry timestamp or now
+    latest_ts = db.query(func.max(ActivityLog.timestamp)).scalar()
+    anchor = latest_ts if latest_ts else datetime.utcnow()
+    anchor_date = anchor.date()
+
+    points: List[Dict[str, Any]] = []
 
     if timeframe == '7d':
-        return [
-            {'date': 'Sep 03', 'compositeScore': max(5, base_score + 3), 'anomalies': 8, 'mitigated': 2},
-            {'date': 'Sep 04', 'compositeScore': max(5, base_score + 2), 'anomalies': 6, 'mitigated': 3},
-            {'date': 'Sep 05', 'compositeScore': max(5, base_score + 4), 'anomalies': 11, 'mitigated': 4},
-            {'date': 'Sep 06', 'compositeScore': max(5, base_score + 1), 'anomalies': 7, 'mitigated': 2},
-            {'date': 'Sep 07', 'compositeScore': max(5, base_score), 'anomalies': 5, 'mitigated': 3},
-            {'date': 'Sep 08', 'compositeScore': max(5, base_score + 1), 'anomalies': 9, 'mitigated': 5},
-            {'date': 'Sep 09', 'compositeScore': max(5, base_score - 1), 'anomalies': 4, 'mitigated': 4},
-        ]
+        for i in range(6, -1, -1):
+            day = anchor_date - timedelta(days=i)
+            day_start = datetime.combine(day, datetime.min.time())
+            day_end = datetime.combine(day, datetime.max.time())
+            date_label = day.strftime('%b %d')
+
+            anomalies = db.query(func.count(ActivityLog.id)).filter(
+                ActivityLog.timestamp >= day_start,
+                ActivityLog.timestamp <= day_end,
+                ActivityLog.is_anomalous == True
+            ).scalar() or 0
+
+            mitigated = db.query(func.count(Alert.id)).filter(
+                Alert.updated_at >= day_start,
+                Alert.updated_at <= day_end,
+                Alert.status.in_(['Mitigated', 'Resolved', 'Dismissed'])
+            ).scalar() or 0
+
+            score_delta = min(25, anomalies * 3) - min(15, mitigated * 2)
+            day_score = max(5, min(100, base_score + score_delta))
+
+            points.append({
+                'date': date_label,
+                'compositeScore': day_score,
+                'anomalies': anomalies,
+                'mitigated': mitigated
+            })
+
     elif timeframe == '90d':
-        return [
-            {'date': 'Week 1', 'compositeScore': max(5, base_score + 10), 'anomalies': 42, 'mitigated': 18},
-            {'date': 'Week 2', 'compositeScore': max(5, base_score + 8), 'anomalies': 38, 'mitigated': 15},
-            {'date': 'Week 3', 'compositeScore': max(5, base_score + 11), 'anomalies': 48, 'mitigated': 22},
-            {'date': 'Week 4', 'compositeScore': max(5, base_score + 7), 'anomalies': 35, 'mitigated': 14},
-            {'date': 'Week 5', 'compositeScore': max(5, base_score + 6), 'anomalies': 32, 'mitigated': 16},
-            {'date': 'Week 6', 'compositeScore': max(5, base_score + 4), 'anomalies': 28, 'mitigated': 12},
-            {'date': 'Week 7', 'compositeScore': max(5, base_score + 5), 'anomalies': 31, 'mitigated': 15},
-            {'date': 'Week 8', 'compositeScore': max(5, base_score + 2), 'anomalies': 24, 'mitigated': 11},
-            {'date': 'Week 9', 'compositeScore': max(5, base_score + 1), 'anomalies': 22, 'mitigated': 10},
-            {'date': 'Week 10', 'compositeScore': max(5, base_score), 'anomalies': 20, 'mitigated': 9},
-            {'date': 'Week 11', 'compositeScore': max(5, base_score - 2), 'anomalies': 17, 'mitigated': 8},
-            {'date': 'Week 12', 'compositeScore': max(5, base_score - 4), 'anomalies': 14, 'mitigated': 7},
-        ]
+        for w in range(11, -1, -1):
+            week_start = datetime.combine(anchor_date - timedelta(days=(w + 1) * 7), datetime.min.time())
+            week_end = datetime.combine(anchor_date - timedelta(days=w * 7), datetime.max.time())
+            date_label = f'Week {12 - w}'
+
+            anomalies = db.query(func.count(ActivityLog.id)).filter(
+                ActivityLog.timestamp >= week_start,
+                ActivityLog.timestamp <= week_end,
+                ActivityLog.is_anomalous == True
+            ).scalar() or 0
+
+            mitigated = db.query(func.count(Alert.id)).filter(
+                Alert.updated_at >= week_start,
+                Alert.updated_at <= week_end,
+                Alert.status.in_(['Mitigated', 'Resolved', 'Dismissed'])
+            ).scalar() or 0
+
+            score_delta = min(20, round(anomalies * 0.8)) - min(12, round(mitigated * 0.5))
+            week_score = max(5, min(100, base_score + score_delta))
+
+            points.append({
+                'date': date_label,
+                'compositeScore': week_score,
+                'anomalies': anomalies,
+                'mitigated': mitigated
+            })
+
     else:
-        return [
-            {'date': 'Aug 11', 'compositeScore': max(5, base_score + 6), 'anomalies': 14, 'mitigated': 6},
-            {'date': 'Aug 13', 'compositeScore': max(5, base_score + 4), 'anomalies': 12, 'mitigated': 5},
-            {'date': 'Aug 15', 'compositeScore': max(5, base_score + 7), 'anomalies': 18, 'mitigated': 8},
-            {'date': 'Aug 17', 'compositeScore': max(5, base_score + 3), 'anomalies': 10, 'mitigated': 4},
-            {'date': 'Aug 19', 'compositeScore': max(5, base_score + 5), 'anomalies': 15, 'mitigated': 7},
-            {'date': 'Aug 21', 'compositeScore': max(5, base_score + 2), 'anomalies': 9, 'mitigated': 5},
-            {'date': 'Aug 23', 'compositeScore': max(5, base_score + 4), 'anomalies': 13, 'mitigated': 6},
-            {'date': 'Aug 25', 'compositeScore': max(5, base_score + 1), 'anomalies': 8, 'mitigated': 4},
-            {'date': 'Aug 27', 'compositeScore': max(5, base_score + 3), 'anomalies': 11, 'mitigated': 5},
-            {'date': 'Aug 29', 'compositeScore': max(5, base_score), 'anomalies': 7, 'mitigated': 3},
-            {'date': 'Aug 31', 'compositeScore': max(5, base_score + 1), 'anomalies': 10, 'mitigated': 6},
-            {'date': 'Sep 02', 'compositeScore': max(5, base_score - 1), 'anomalies': 6, 'mitigated': 4},
-            {'date': 'Sep 04', 'compositeScore': max(5, base_score), 'anomalies': 8, 'mitigated': 5},
-            {'date': 'Sep 06', 'compositeScore': max(5, base_score - 2), 'anomalies': 5, 'mitigated': 3},
-            {'date': 'Sep 09', 'compositeScore': max(5, base_score - 3), 'anomalies': 4, 'mitigated': 4},
-        ]
+        # 30-day timeframe: 15 bi-daily sample intervals
+        for i in range(14, -1, -1):
+            day_end_dt = anchor_date - timedelta(days=i * 2)
+            day_start_dt = day_end_dt - timedelta(days=1)
+            t_start = datetime.combine(day_start_dt, datetime.min.time())
+            t_end = datetime.combine(day_end_dt, datetime.max.time())
+            date_label = day_end_dt.strftime('%b %d')
+
+            anomalies = db.query(func.count(ActivityLog.id)).filter(
+                ActivityLog.timestamp >= t_start,
+                ActivityLog.timestamp <= t_end,
+                ActivityLog.is_anomalous == True
+            ).scalar() or 0
+
+            mitigated = db.query(func.count(Alert.id)).filter(
+                Alert.updated_at >= t_start,
+                Alert.updated_at <= t_end,
+                Alert.status.in_(['Mitigated', 'Resolved', 'Dismissed'])
+            ).scalar() or 0
+
+            score_delta = min(22, anomalies * 2) - min(10, mitigated)
+            period_score = max(5, min(100, base_score + score_delta))
+
+            points.append({
+                'date': date_label,
+                'compositeScore': period_score,
+                'anomalies': anomalies,
+                'mitigated': mitigated
+            })
+
+    return points
 
 
 @router.get('/threat-vectors')
 def get_threat_vectors(db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
+    """
+    Dynamically computes observed incident velocity and empirical baseline thresholds
+    across major insider threat vectors from database alerts and behavioral activity telemetry.
+    """
     alerts = db.query(Alert).all()
-    vector_counts = {}
-    for a in alerts:
-        v = a.vector or 'Behavioral Anomaly'
-        vector_counts[v] = vector_counts.get(v, 0) + 1
+    anomalous_activities = db.query(ActivityLog).filter(ActivityLog.is_anomalous == True).all()
 
-    return [
-        {'vector': 'Data Exfiltration', 'observed': max(vector_counts.get('Data Exfiltration', 0), 42), 'baseline': 12, 'riskImpact': 'Critical'},
-        {'vector': 'Anomalous Auth', 'observed': max(vector_counts.get('Anomalous Auth', 0), 18), 'baseline': 6, 'riskImpact': 'High'},
-        {'vector': 'Privilege Escalation', 'observed': max(vector_counts.get('Privilege Escalation', 0), 9), 'baseline': 3, 'riskImpact': 'Medium'},
-        {'vector': 'Off-Hours Access', 'observed': max(vector_counts.get('Off-Hours Access', 0), 15), 'baseline': 5, 'riskImpact': 'Medium'},
-        {'vector': 'Removable Storage', 'observed': max(vector_counts.get('Removable Storage', 0), 7), 'baseline': 2, 'riskImpact': 'Low'},
+    vectors_config = [
+        {
+            "vector": "Data Exfiltration",
+            "alert_keywords": ["exfiltration", "clone", "download", "egress"],
+            "activity_types": ["git_clone_mass", "mass_file_download"],
+            "default_baseline": 12
+        },
+        {
+            "vector": "Anomalous Auth",
+            "alert_keywords": ["auth", "login", "credential", "brute", "mfa"],
+            "activity_types": ["failed_login", "unauthorized_ip"],
+            "default_baseline": 6
+        },
+        {
+            "vector": "Privilege Escalation",
+            "alert_keywords": ["privilege", "iam", "root", "elevation", "admin"],
+            "activity_types": ["iam_policy_modification"],
+            "default_baseline": 3
+        },
+        {
+            "vector": "Off-Hours Access",
+            "alert_keywords": ["off-hours", "night", "weekend"],
+            "activity_types": [],
+            "default_baseline": 5
+        },
+        {
+            "vector": "Removable Storage",
+            "alert_keywords": ["usb", "storage", "media", "removable"],
+            "activity_types": ["usb_device_mounted"],
+            "default_baseline": 2
+        },
+        {
+            "vector": "Data Access Violation",
+            "alert_keywords": ["compensation", "access violation", "unauthorized query", "vault"],
+            "activity_types": ["sensitive_data_export", "unauthorized_query"],
+            "default_baseline": 4
+        }
     ]
+
+    results = []
+    for cfg in vectors_config:
+        v_name = cfg["vector"]
+        keywords = cfg["alert_keywords"]
+        act_types = cfg["activity_types"]
+
+        alert_count = sum(
+            1 for a in alerts
+            if (a.vector and any(kw in a.vector.lower() for kw in keywords))
+            or (a.title and any(kw in a.title.lower() for kw in keywords))
+        )
+
+        if v_name == "Off-Hours Access":
+            activity_count = sum(
+                1 for act in anomalous_activities
+                if act.timestamp and (act.timestamp.hour < 7 or act.timestamp.hour >= 19)
+            )
+        else:
+            activity_count = sum(
+                1 for act in anomalous_activities
+                if act.activity_type in act_types
+            )
+
+        observed = alert_count + activity_count
+        baseline = cfg["default_baseline"]
+
+        if observed >= baseline * 2:
+            impact = "Critical"
+        elif observed >= baseline:
+            impact = "High"
+        elif observed > 0:
+            impact = "Medium"
+        else:
+            impact = "Low"
+
+        results.append({
+            "vector": v_name,
+            "observed": observed,
+            "baseline": baseline,
+            "riskImpact": impact
+        })
+
+    return results

@@ -11,6 +11,7 @@ from app.models.employee import Employee
 from app.models.alert import Alert
 from app.models.activity import ActivityLog
 from app.models.behavioral_profile import BehavioralProfile
+from app.models.notification import Notification
 from app.services.profiling_engine import recalculate_employee_baseline
 from app.utils.security import get_password_hash
 
@@ -22,23 +23,62 @@ def seed_database():
     db = SessionLocal()
 
     try:
-        # 1. Seed Analyst User
-        existing_user = db.query(User).filter(User.email == "admin@threat.ai").first()
-        if not existing_user:
-            admin_user = User(
-                email="admin@threat.ai",
-                hashed_password=get_password_hash("admin123"),
-                name="Security Ops",
-                role="Security Analyst",
-                initials="SO",
-                department="Security Operations",
-                clearance="TOP SECRET // SCI",
-                is_active=True
-            )
-            db.add(admin_user)
-            print("Seeded default analyst user: admin@threat.ai / admin123")
-        else:
-            print("Analyst user already exists.")
+        # 1. Seed RBAC Users (Administrator, Security Manager, SOC Engineer, Security Analyst)
+        users_to_seed = [
+            {
+                "email": "admin@threat.ai",
+                "name": "System Administrator",
+                "role": "Administrator",
+                "initials": "SA",
+                "department": "Security Operations",
+                "clearance": "TOP SECRET // SCI"
+            },
+            {
+                "email": "manager@threat.ai",
+                "name": "Security Manager",
+                "role": "Security Manager",
+                "initials": "SM",
+                "department": "Incident Response",
+                "clearance": "TOP SECRET // SCI"
+            },
+            {
+                "email": "engineer@threat.ai",
+                "name": "SOC Lead Engineer",
+                "role": "SOC Engineer",
+                "initials": "SE",
+                "department": "SOC Engineering",
+                "clearance": "SECRET"
+            },
+            {
+                "email": "analyst@threat.ai",
+                "name": "Security Analyst",
+                "role": "Security Analyst",
+                "initials": "SO",
+                "department": "Threat Triage",
+                "clearance": "SECRET"
+            },
+        ]
+
+        for u_data in users_to_seed:
+            existing = db.query(User).filter(User.email == u_data["email"]).first()
+            if not existing:
+                new_user = User(
+                    email=u_data["email"],
+                    hashed_password=get_password_hash("admin123"),
+                    name=u_data["name"],
+                    role=u_data["role"],
+                    initials=u_data["initials"],
+                    department=u_data["department"],
+                    clearance=u_data["clearance"],
+                    is_active=True
+                )
+                db.add(new_user)
+                print(f"Seeded RBAC user: {u_data['email']} ({u_data['role']})")
+            else:
+                # Update role to ensure consistency
+                existing.role = u_data["role"]
+                existing.name = u_data["name"]
+                db.commit()
 
         # 2. Seed Monitored Employees
         if db.query(Employee).count() == 0:
@@ -446,6 +486,52 @@ def seed_database():
                         anomaly_score=5
                     ))
 
+                # Inject sporadic historical anomaly events across days for rich trajectory analytics
+                if day_offset == 8:
+                    activity_entries.append(ActivityLog(
+                        employee_id="101",
+                        activity_type="failed_login",
+                        source_ip="194.26.29.4",
+                        workstation="WS-FIN-091",
+                        timestamp=day_date.replace(hour=22, minute=14, second=0),
+                        details={"reason": "bad_password", "origin": "Berlin, Germany"},
+                        is_anomalous=True,
+                        anomaly_score=65
+                    ))
+                elif day_offset == 5:
+                    activity_entries.append(ActivityLog(
+                        employee_id="102",
+                        activity_type="mass_file_download",
+                        source_ip="192.168.1.88",
+                        workstation="WS-ENG-402",
+                        timestamp=day_date.replace(hour=23, minute=45, second=0),
+                        details={"files_count": 85, "mb": 420.0},
+                        is_anomalous=True,
+                        anomaly_score=72
+                    ))
+                elif day_offset == 3:
+                    activity_entries.append(ActivityLog(
+                        employee_id="104",
+                        activity_type="sensitive_data_export",
+                        source_ip="192.168.6.50",
+                        workstation="WS-LEG-014",
+                        timestamp=day_date.replace(hour=20, minute=10, second=0),
+                        details={"report": "draft_litigation.pdf", "mb": 35.0},
+                        is_anomalous=True,
+                        anomaly_score=68
+                    ))
+                elif day_offset == 1:
+                    activity_entries.append(ActivityLog(
+                        employee_id="103",
+                        activity_type="iam_policy_modification",
+                        source_ip="10.200.5.21",
+                        workstation="WS-OPS-114",
+                        timestamp=day_date.replace(hour=21, minute=30, second=0),
+                        details={"policy": "ReadOnlyAccess_Modified"},
+                        is_anomalous=True,
+                        anomaly_score=70
+                    ))
+
             # Inject recent acute anomalous incidents (past 24h) corresponding to active threat alerts:
             # 1. John Carter (101): Off-hours brute force & foreign login
             for i in range(5):
@@ -534,7 +620,61 @@ def seed_database():
         else:
             print("Activity logs already seeded.")
 
-        # 5. Compute Behavioral Baselines
+        # 5. Seed Initial Security Notifications
+        if db.query(Notification).count() == 0:
+            print("Seeding initial security notifications...")
+            now = datetime.utcnow()
+            initial_notifications = [
+                Notification(
+                    title="Critical Alert: High-Volume Exfiltration Detected",
+                    message="Priya Nair (Legal) triggered a 4.8 GB classified patent vault bulk pull.",
+                    severity="Critical",
+                    type="alert",
+                    employee_id="104",
+                    alert_id="ALT-2026-001",
+                    link="/alerts",
+                    read=False,
+                    created_at=now - timedelta(minutes=12)
+                ),
+                Notification(
+                    title="Brute Force Anomaly: Berlin IP Gateway",
+                    message="John Carter (Finance) exhibited 5 consecutive failed logins followed by MFA bypass from 194.26.29.4.",
+                    severity="High",
+                    type="anomaly",
+                    employee_id="101",
+                    alert_id="ALT-2026-002",
+                    link="/alerts",
+                    read=False,
+                    created_at=now - timedelta(minutes=42)
+                ),
+                Notification(
+                    title="Containment Directive Executed",
+                    message="Elena Rostova (Engineering) account isolated following mass repository clone detection.",
+                    severity="Critical",
+                    type="containment",
+                    employee_id="102",
+                    alert_id="ALT-2026-004",
+                    link="/employees/102",
+                    read=True,
+                    created_at=now - timedelta(hours=2)
+                ),
+                Notification(
+                    title="Empirical Behavioral Baseline Computed",
+                    message="Workforce behavioral profiling engine updated 8 employee anomaly baselines.",
+                    severity="Low",
+                    type="system",
+                    link="/behavior/profiles",
+                    read=True,
+                    created_at=now - timedelta(hours=6)
+                ),
+            ]
+            db.add_all(initial_notifications)
+            db.commit()
+            print(f"Seeded {len(initial_notifications)} initial notifications.")
+        else:
+            print("Notifications already seeded.")
+
+        # 6. Compute Behavioral Baselines
         print("Computing empirical behavioral baselines for monitored workforce...")
         employees = db.query(Employee).all()
         for emp in employees:
