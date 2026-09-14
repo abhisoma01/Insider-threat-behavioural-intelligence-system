@@ -399,6 +399,41 @@ export const api = {
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
+  },
+
+  // ================= Log Collectors & Telemetry Sensors =================
+
+  /**
+   * Retrieves operational status and metrics for all enterprise log collectors.
+   */
+  getCollectors: async () => {
+    return await request('/api/v1/collectors');
+  },
+
+  /**
+   * Triggers an on-demand telemetry collection pulse from a sensor.
+   * @param {string} collectorId
+   * @param {boolean} anomalySimulation
+   * @param {string|null} employeeId
+   */
+  triggerCollectorPulse: async (collectorId, anomalySimulation = false, employeeId = null) => {
+    return await request(`/api/v1/collectors/${collectorId}/pulse`, {
+      method: 'POST',
+      body: {
+        anomaly_simulation: anomalySimulation,
+        custom_employee_id: employeeId
+      }
+    });
+  },
+
+  /**
+   * Enables or pauses a log collector sensor stream.
+   * @param {string} collectorId
+   */
+  toggleCollector: async (collectorId) => {
+    return await request(`/api/v1/collectors/${collectorId}/toggle`, {
+      method: 'POST'
+    });
   }
 };
 

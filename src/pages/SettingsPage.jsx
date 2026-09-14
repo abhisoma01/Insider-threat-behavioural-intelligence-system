@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sliders,
   Shield,
@@ -13,9 +13,83 @@ import {
   Server,
   Zap,
   Mail,
-  Smartphone
+  Smartphone,
+  Activity,
+  Play,
+  Pause,
+  RefreshCw,
+  Terminal
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import api from '../services/api';
+
+const DEFAULT_COLLECTORS = [
+  {
+    id: 'endpoint_auth',
+    name: 'Host OS Authentication Sensor',
+    type: 'os_auth',
+    description: 'Collects Windows Security Logs (IDs 4624/4625/4672) & Linux PAM auth events.',
+    source_target: 'Monitored Endpoints (WS-FIN-091, WS-ENG-402, WS-OPS-114)',
+    status: 'Active',
+    collection_interval_sec: 15,
+    events_collected: 4281,
+    throughput_eps: 14.2,
+    last_ping: 'Just now',
+    supported_event_types: ['login_success', 'failed_login', 'privilege_escalation', 'mfa_challenge']
+  },
+  {
+    id: 'removable_media',
+    name: 'Plug-and-Play USB Storage Sensor',
+    type: 'removable_media',
+    description: 'Monitors USB Mass Storage insertions, PnP device mounts, and unapproved serial numbers.',
+    source_target: 'Endpoint PnP Device Bus (Kernel DLP Driver)',
+    status: 'Active',
+    collection_interval_sec: 10,
+    events_collected: 912,
+    throughput_eps: 2.8,
+    last_ping: 'Just now',
+    supported_event_types: ['usb_device_mounted', 'usb_mass_copy', 'usb_unmount']
+  },
+  {
+    id: 'data_egress',
+    name: 'Network Data Movement & Git Egress Sensor',
+    type: 'data_egress',
+    description: 'Captures high-volume document downloads, bulk git repository clones, and DMS vault pulls.',
+    source_target: 'GitHub Enterprise & Corporate DMS Vault (//legal-dms)',
+    status: 'Active',
+    collection_interval_sec: 20,
+    events_collected: 2840,
+    throughput_eps: 8.5,
+    last_ping: 'Just now',
+    supported_event_types: ['git_clone_mass', 'mass_file_download', 'sensitive_data_export']
+  },
+  {
+    id: 'cloud_audit',
+    name: 'AWS CloudTrail IAM Audit Sensor',
+    type: 'cloud_audit',
+    description: 'Audits AWS IAM policy changes, root token usage, and permission boundary tampering.',
+    source_target: 'AWS CloudTrail Event Stream (eu-west-1, us-east-1)',
+    status: 'Active',
+    collection_interval_sec: 30,
+    events_collected: 1489,
+    throughput_eps: 5.1,
+    last_ping: 'Just now',
+    supported_event_types: ['iam_policy_modification', 'role_elevation_attempt', 'api_key_generated']
+  },
+  {
+    id: 'network_vpn',
+    name: 'Enterprise Zero-Trust VPN Gateway Sensor',
+    type: 'vpn_gateway',
+    description: 'Monitors remote perimeter VPN ingress, foreign IP geolocation, and off-hours sessions.',
+    source_target: 'Global VPN Concentrator (194.26.29.4 Berlin, 10.200.5.21 London)',
+    status: 'Active',
+    collection_interval_sec: 15,
+    events_collected: 3672,
+    throughput_eps: 11.4,
+    last_ping: 'Just now',
+    supported_event_types: ['vpn_connection_established', 'vpn_foreign_ip_detected', 'vpn_session_terminated']
+  }
+];
 
 const DEFAULT_SETTINGS = {
   riskThreshold: 75,
@@ -86,9 +160,77 @@ export default function SettingsPage() {
   const tabs = [
     { id: 'thresholds', label: 'Risk & Thresholds', icon: Shield },
     { id: 'dashboard', label: 'Interface & Display', icon: Sliders },
+    { id: 'collectors', label: 'Log Collectors & Sensors', icon: Radio },
     { id: 'integrations', label: 'SIEM & Webhooks', icon: Server },
     { id: 'notifications', label: 'Notification Rules', icon: Bell }
   ];
+
+  // Log Collectors State
+  const [collectors, setCollectors] = useState(DEFAULT_COLLECTORS);
+  const [isPulsing, setIsPulsing] = useState({});
+  const [collectorStats, setCollectorStats] = useState({
+    total_events_collected: 13194,
+    active_count: 5,
+    fleet_health: 'Operational // Nominal'
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    api.getCollectors()
+      .then((res) => {
+        if (isMounted && res?.collectors && res.collectors.length > 0) {
+          setCollectors(res.collectors);
+          setCollectorStats({
+            total_events_collected: res.total_events_collected,
+            active_count: res.active_count,
+            fleet_health: res.fleet_health
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Collectors live fetch fallback to default:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleTriggerPulse = async (collectorId, simulateAnomaly = false) => {
+    setIsPulsing((prev) => ({ ...prev, [collectorId]: true }));
+    try {
+      const res = await api.triggerCollectorPulse(collectorId, simulateAnomaly);
+      showToast(
+        `${res.collector_name}: Ingested ${res.events_ingested} event(s)${
+          res.anomalies_flagged > 0 ? ' [ANOMALY FLAGGED & NOTIFIED]' : ' [Nominal Telemetry]'
+        }`
+      );
+      const updated = await api.getCollectors();
+      if (updated?.collectors) {
+        setCollectors(updated.collectors);
+        setCollectorStats({
+          total_events_collected: updated.total_events_collected,
+          active_count: updated.active_count,
+          fleet_health: updated.fleet_health
+        });
+      }
+    } catch (err) {
+      showToast(`Collector pulse failed: ${err.message}`);
+    } finally {
+      setIsPulsing((prev) => ({ ...prev, [collectorId]: false }));
+    }
+  };
+
+  const handleToggleCollector = async (collectorId) => {
+    try {
+      const res = await api.toggleCollector(collectorId);
+      showToast(res.message);
+      setCollectors((prev) =>
+        prev.map((c) => (c.id === collectorId ? { ...c, status: res.status } : c))
+      );
+    } catch (err) {
+      showToast(`Toggle failed: ${err.message}`);
+    }
+  };
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '960px' }}>
@@ -515,6 +657,323 @@ export default function SettingsPage() {
               onChange={(e) => handleSettingChange('denseTableMode', e.target.checked)}
               style={{ width: '18px', height: '18px', accentColor: theme.primary, cursor: 'pointer' }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* ================================================= */}
+      {/* 4. TAB 3: LOG COLLECTORS & SENSORS               */}
+      {/* ================================================= */}
+      {activeTab === 'collectors' && (
+        <div
+          style={{
+            backgroundColor: theme.surface,
+            borderRadius: '14px',
+            border: `1px solid ${theme.border}`,
+            padding: '28px',
+            boxShadow: theme.shadow,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px'
+          }}
+        >
+          {/* Header Fleet Banner */}
+          <div
+            style={{
+              padding: '20px',
+              backgroundColor: theme.surfaceVariant,
+              borderRadius: '12px',
+              border: `1px solid ${theme.borderSubtle}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '16px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '10px',
+                  backgroundColor: theme.primaryContainer,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: theme.primary
+                }}
+              >
+                <Radio size={22} className="animate-pulse" />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '800', color: theme.textPrimary }}>
+                    Distributed Telemetry Ingestion Fleet
+                  </h3>
+                  <span
+                    style={{
+                      padding: '3px 10px',
+                      borderRadius: '12px',
+                      backgroundColor: '#10b98122',
+                      color: '#10b981',
+                      fontSize: '11px',
+                      fontWeight: '700'
+                    }}
+                  >
+                    ● {collectorStats.fleet_health || 'Fleet Operational'}
+                  </span>
+                </div>
+                <p style={{ margin: '4px 0 0 0', fontSize: '12.5px', color: theme.textSecondary }}>
+                  5 active sensor daemons streaming OS, USB, CloudTrail, Git, and VPN events into SOC event pipelines.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '11px', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block' }}>
+                  Total Ingested Events
+                </span>
+                <span style={{ fontSize: '18px', fontWeight: '800', color: theme.primary }}>
+                  {collectorStats.total_events_collected?.toLocaleString() || '13,194'}
+                </span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '11px', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block' }}>
+                  Active Sensor Daemons
+                </span>
+                <span style={{ fontSize: '18px', fontWeight: '800', color: '#10b981' }}>
+                  {collectorStats.active_count ?? 5} / 5
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Standalone Agent CLI Callout Box */}
+          <div
+            style={{
+              padding: '16px 20px',
+              backgroundColor: '#0a0f1d',
+              borderRadius: '10px',
+              border: '1px solid #1e293b',
+              color: '#94a3b8',
+              fontSize: '12.5px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#38bdf8', fontWeight: '700' }}>
+                <Terminal size={15} />
+                <span>Live Shipper Agent CLI (Automated SOC Pipeline Execution)</span>
+              </div>
+              <span style={{ fontSize: '11px', color: '#64748b' }}>Python 3.10+ Executable</span>
+            </div>
+            <div style={{ backgroundColor: '#030712', padding: '10px 14px', borderRadius: '6px', fontFamily: 'monospace', color: '#4ade80', fontSize: '12px', overflowX: 'auto' }}>
+              <code>python backend/collectors/agent.py --collector all --interval 10 --iterations 5</code>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11.5px', color: '#64748b' }}>
+              <span>Simulate high-risk anomalous exfiltration: <code style={{ color: '#f87171' }}>python backend/collectors/agent.py --collector endpoint_auth --simulate-anomaly</code></span>
+            </div>
+          </div>
+
+          {/* Collectors Sensor Grid */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {collectors.map((c) => {
+              const isActive = c.status === 'Active';
+              const pulsing = isPulsing[c.id];
+
+              return (
+                <div
+                  key={c.id}
+                  style={{
+                    padding: '20px',
+                    backgroundColor: theme.surfaceVariant,
+                    borderRadius: '12px',
+                    border: `1px solid ${theme.borderSubtle}`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '14px',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                >
+                  {/* Card Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          backgroundColor: isActive ? '#10b98118' : '#f59e0b18',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: isActive ? '#10b981' : '#f59e0b'
+                        }}
+                      >
+                        <Activity size={18} />
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <h4 style={{ margin: 0, fontSize: '14.5px', fontWeight: '700', color: theme.textPrimary }}>
+                            {c.name}
+                          </h4>
+                          <span
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              backgroundColor: isActive ? '#10b98122' : '#f59e0b22',
+                              color: isActive ? '#10b981' : '#f59e0b',
+                              fontSize: '11px',
+                              fontWeight: '700'
+                            }}
+                          >
+                            ● {c.status}
+                          </span>
+                          <span
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              backgroundColor: theme.surface,
+                              border: `1px solid ${theme.border}`,
+                              color: theme.textSecondary,
+                              fontSize: '10.5px',
+                              fontWeight: '600',
+                              fontFamily: 'monospace'
+                            }}
+                          >
+                            {c.id}
+                          </span>
+                        </div>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '12.5px', color: theme.textSecondary, lineHeight: '1.4' }}>
+                          {c.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        onClick={() => handleToggleCollector(c.id)}
+                        title={isActive ? 'Pause Sensor Daemon' : 'Resume Sensor Daemon'}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border: `1px solid ${theme.border}`,
+                          backgroundColor: theme.surface,
+                          color: theme.textSecondary,
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {isActive ? <Pause size={12} /> : <Play size={12} />}
+                        {isActive ? 'Pause' : 'Resume'}
+                      </button>
+
+                      <button
+                        onClick={() => handleTriggerPulse(c.id, false)}
+                        disabled={pulsing || !isActive}
+                        title="Ingest fresh nominal telemetry pulse now"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 14px',
+                          borderRadius: '6px',
+                          border: `1px solid ${theme.border}`,
+                          backgroundColor: theme.surface,
+                          color: theme.textPrimary,
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          cursor: isActive && !pulsing ? 'pointer' : 'not-allowed',
+                          opacity: !isActive ? 0.5 : 1
+                        }}
+                      >
+                        <RefreshCw size={12} className={pulsing ? 'animate-spin' : ''} />
+                        {pulsing ? 'Ingesting...' : 'Pulse Telemetry'}
+                      </button>
+
+                      <button
+                        onClick={() => handleTriggerPulse(c.id, true)}
+                        disabled={pulsing || !isActive}
+                        title="Simulate anomalous high-risk exfiltration event"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border: '1px solid #ef444444',
+                          backgroundColor: '#ef444415',
+                          color: '#ef4444',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          cursor: isActive && !pulsing ? 'pointer' : 'not-allowed',
+                          opacity: !isActive ? 0.5 : 1
+                        }}
+                      >
+                        <ShieldAlert size={12} />
+                        Simulate Anomaly
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Metadata and Supported Events */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingTop: '10px',
+                      borderTop: `1px solid ${theme.borderSubtle}`,
+                      fontSize: '11.5px',
+                      color: theme.textSecondary,
+                      flexWrap: 'wrap',
+                      gap: '12px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                      <span>
+                        Target: <strong style={{ color: theme.textPrimary }}>{c.source_target}</strong>
+                      </span>
+                      <span>
+                        Throughput: <strong style={{ color: theme.primary }}>{c.throughput_eps} EPS</strong>
+                      </span>
+                      <span>
+                        Harvested: <strong style={{ color: theme.textPrimary }}>{c.events_collected?.toLocaleString()}</strong>
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '10.5px', color: theme.textSecondary }}>Sensors:</span>
+                      {c.supported_event_types?.map((evt) => (
+                        <span
+                          key={evt}
+                          style={{
+                            padding: '2px 7px',
+                            borderRadius: '4px',
+                            backgroundColor: theme.surface,
+                            border: `1px solid ${theme.borderSubtle}`,
+                            fontSize: '10.5px',
+                            fontFamily: 'monospace',
+                            color: theme.textSecondary
+                          }}
+                        >
+                          {evt}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

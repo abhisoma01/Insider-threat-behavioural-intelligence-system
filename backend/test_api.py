@@ -239,8 +239,75 @@ def test_endpoints():
     assert eval_data["composite_deviation_score"] >= 40
     print(f"[PASS] POST /api/v1/behavior/evaluate-deviation (Deviation score: {eval_data['composite_deviation_score']}, Tier: {eval_data['severity_tier']})")
 
+    # 11. Distributed Log Collector Sensors & Telemetry Ingestion Fleet
+    # 11a. List Collectors (Authenticated)
+    collectors_res = client.get(
+        "/api/v1/collectors",
+        headers={"Authorization": f"Bearer {analyst_token}"}
+    )
+    assert collectors_res.status_code == 200, f"List collectors failed: {collectors_res.text}"
+    col_data = collectors_res.json()
+    assert col_data["active_count"] == 5
+    assert len(col_data["collectors"]) == 5
+    collector_ids = [c["id"] for c in col_data["collectors"]]
+    assert "endpoint_auth" in collector_ids
+    assert "removable_media" in collector_ids
+    assert "data_egress" in collector_ids
+    assert "cloud_audit" in collector_ids
+    assert "network_vpn" in collector_ids
+    print(f"[PASS] GET /api/v1/collectors (5 distributed log collector sensors active, fleet status: {col_data['fleet_health']})")
+
+    # 11b. RBAC: Analyst forbidden from pulsing or toggling collectors
+    analyst_pulse = client.post(
+        "/api/v1/collectors/endpoint_auth/pulse",
+        headers={"Authorization": f"Bearer {analyst_token}"},
+        json={"simulate_anomaly": False}
+    )
+    assert analyst_pulse.status_code == 403, f"Expected 403 for analyst collector pulse, got {analyst_pulse.status_code}"
+    print("[PASS] RBAC Check: Security Analyst denied from pulsing log collectors (HTTP 403 Forbidden)")
+
+    # 11c. Engineer executes nominal telemetry pulse on endpoint_auth
+    pulse_nominal = client.post(
+        "/api/v1/collectors/endpoint_auth/pulse",
+        headers={"Authorization": f"Bearer {engineer_token}"},
+        json={"simulate_anomaly": False}
+    )
+    assert pulse_nominal.status_code == 200, f"Nominal pulse failed: {pulse_nominal.text}"
+    pulse_nom_data = pulse_nominal.json()
+    assert pulse_nom_data["events_ingested"] >= 1
+    assert pulse_nom_data["anomalies_flagged"] == 0
+    print(f"[PASS] POST /api/v1/collectors/endpoint_auth/pulse [Nominal] (Ingested {pulse_nom_data['events_ingested']} events into telemetry pipeline)")
+
+    # 11d. Engineer executes anomaly simulation on removable_media (triggers automated notification)
+    pulse_anomaly = client.post(
+        "/api/v1/collectors/removable_media/pulse",
+        headers={"Authorization": f"Bearer {engineer_token}"},
+        json={"simulate_anomaly": True}
+    )
+    assert pulse_anomaly.status_code == 200, f"Anomaly pulse failed: {pulse_anomaly.text}"
+    pulse_anom_data = pulse_anomaly.json()
+    assert pulse_anom_data["events_ingested"] >= 1
+    assert pulse_anom_data["anomalies_flagged"] >= 1
+    print(f"[PASS] POST /api/v1/collectors/removable_media/pulse [Anomaly Simulation] (Ingested {pulse_anom_data['events_ingested']} events, Flagged {pulse_anom_data['anomalies_flagged']} high-risk anomalies)")
+
+    # 11e. Toggle Collector state (Active -> Paused -> Active)
+    toggle_pause = client.post(
+        "/api/v1/collectors/cloud_audit/toggle",
+        headers={"Authorization": f"Bearer {admin_token}"}
+    )
+    assert toggle_pause.status_code == 200
+    assert toggle_pause.json()["status"] == "Paused"
+
+    toggle_resume = client.post(
+        "/api/v1/collectors/cloud_audit/toggle",
+        headers={"Authorization": f"Bearer {admin_token}"}
+    )
+    assert toggle_resume.status_code == 200
+    assert toggle_resume.json()["status"] == "Active"
+    print("[PASS] POST /api/v1/collectors/cloud_audit/toggle (Sensor daemon Paused and Resumed successfully)")
+
     print("\n==================================================================")
-    print("ALL FASTAPI ENTERPRISE RBAC, NOTIFICATIONS, REPORTS, AND BEHAVIORAL ENDPOINTS PASSED VERIFICATION WITH 100% SUCCESS!")
+    print("ALL FASTAPI ENTERPRISE RBAC, NOTIFICATIONS, REPORTS, BEHAVIORAL & LOG COLLECTOR ENDPOINTS PASSED VERIFICATION WITH 100% SUCCESS!")
     print("==================================================================")
 
 

@@ -89,6 +89,18 @@
 ### 5. Dynamic Risk Trajectory & Threat Vector Analysis
 * Eliminated static mock data; daily anomaly counts and mitigation trendlines (`7d`, `30d`, `90d`) are dynamically aggregated from database records based on calendar time intervals.
 
+### 6. Distributed Log Collector Fleet & Telemetry Ingestion Pipeline
+* **5 Specialized Security Sensors:**
+  * **Host OS Authentication Sensor (`endpoint_auth`):** Captures Windows Security Event Logs (Logon 4624, Failed 4625, Privilege Escalation 4672) & Linux PAM auth events.
+  * **Plug-and-Play USB Storage Sensor (`removable_media`):** Monitors endpoint PnP kernel driver events, unauthorized USB mass storage mounts, and large payload dumps.
+  * **Network Data Movement & Git Egress Sensor (`data_egress`):** Tracks bulk repository clones (`git_clone_mass`), DMS vault downloads, and unauthorized exports.
+  * **AWS CloudTrail IAM Audit Sensor (`cloud_audit`):** Monitors IAM role elevations, access key generations, and permission boundary modifications.
+  * **Enterprise Zero-Trust VPN Gateway Sensor (`network_vpn`):** Inspects remote perimeter ingress, off-hours tunnels, and foreign IP geolocation anomalies.
+* **Autonomous Telemetry Shipper CLI (`backend/collectors/agent.py`):**
+  * Authenticates as SOC Engineer via JWT and periodically harvests/transmits system telemetry.
+  * Live simulation mode: `--simulate-anomaly` immediately injects an anomalous activity burst, triggering real-time Z-score deviation alerts and SOC notifications.
+* **Interactive Sensors Console:** Full dashboard settings tab with real-time throughput metrics (EPS), sensor health beacons, pause/resume daemon toggles, and on-demand pulse triggers.
+
 ---
 
 ## 🚀 Quick Start Guide
@@ -172,10 +184,12 @@ insider-dashboard/
 │   │   │   ├── alerts.py            # Incident alerts triage lifecycle
 │   │   │   ├── auth.py              # JWT authentication & require_roles RBAC factory
 │   │   │   ├── behavior.py          # Behavioral profiling & baseline recalculation
+│   │   │   ├── collectors.py        # Log collector fleet & telemetry sensor endpoints
 │   │   │   ├── employees.py         # Monitored identity directory & containment actions
 │   │   │   ├── notifications.py     # Database-backed notifications router
 │   │   │   ├── reports.py           # CISO executive dossier & CSV streaming exports
 │   │   │   └── risk.py              # Dynamic risk trajectory & threat vectors
+│   │   ├── collectors/              # Log collector manager & sensor definitions
 │   │   ├── models/                  # SQLAlchemy 2.0 ORM database models
 │   │   ├── schemas/                 # Pydantic v2 validation & response schemas
 │   │   ├── services/
@@ -185,6 +199,8 @@ insider-dashboard/
 │   │   ├── config.py                # Environment configuration
 │   │   ├── database.py              # Engine setup & DB session generator
 │   │   └── main.py                  # FastAPI application entry point
+│   ├── collectors/
+│   │   └── agent.py                 # Standalone CLI telemetry log shipper agent
 │   ├── seed.py                      # Multi-role database seeder & 14-day telemetry generator
 │   └── test_api.py                  # Full automated integration test suite
 ├── src/
