@@ -12,6 +12,37 @@ import {
 } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 
+const DEMO_ROLES = [
+  {
+    role: 'Administrator',
+    email: 'admin@threat.ai',
+    badge: 'Full Oversight',
+    color: '#818cf8',
+    borderColor: '#4f46e5'
+  },
+  {
+    role: 'Security Manager',
+    email: 'manager@threat.ai',
+    badge: 'Containment (Lock)',
+    color: '#f59e0b',
+    borderColor: '#d97706'
+  },
+  {
+    role: 'SOC Engineer',
+    email: 'engineer@threat.ai',
+    badge: 'Telemetry & Ingestion',
+    color: '#10b981',
+    borderColor: '#059669'
+  },
+  {
+    role: 'Security Analyst',
+    email: 'analyst@threat.ai',
+    badge: 'Investigation / Triage',
+    color: '#38bdf8',
+    borderColor: '#0284c7'
+  }
+];
+
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState('admin@threat.ai');
   const [password, setPassword] = useState('admin123');
@@ -51,8 +82,8 @@ export default function Login({ onLogin }) {
     }
   };
 
-  const handleQuickFill = () => {
-    setEmail('admin@threat.ai');
+  const handleSelectRole = (roleEmail) => {
+    setEmail(roleEmail);
     setPassword('admin123');
     setError('');
   };
@@ -76,7 +107,7 @@ export default function Login({ onLogin }) {
       <div
         style={{
           width: '100%',
-          maxWidth: '420px',
+          maxWidth: '460px',
           backgroundColor: '#0f172a',
           borderRadius: '16px',
           border: '1px solid #1e293b',
@@ -329,40 +360,107 @@ export default function Login({ onLogin }) {
           </button>
         </form>
 
-        {/* Demo Credentials Quick Fill Button */}
+        {/* Multi-Role Quick Select (RBAC) */}
         <div
           style={{
             marginTop: '22px',
-            textAlign: 'center',
             paddingTop: '16px',
             borderTop: '1px solid #1e293b'
           }}
         >
-          <button
-            type="button"
-            onClick={handleQuickFill}
+          <div
             style={{
-              background: 'transparent',
-              border: '1px dashed #475569',
-              color: '#94a3b8',
-              fontSize: '11.5px',
-              fontWeight: '500',
-              borderRadius: '6px',
-              padding: '6px 12px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#818cf8';
-              e.currentTarget.style.color = '#f8fafc';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#475569';
-              e.currentTarget.style.color = '#94a3b8';
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '10px'
             }}
           >
-            Fill Demo Credentials (admin@threat.ai)
-          </button>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: '700',
+                color: '#94a3b8',
+                letterSpacing: '0.6px',
+                textTransform: 'uppercase'
+              }}
+            >
+              Select RBAC Demo Role:
+            </span>
+            <span style={{ fontSize: '10.5px', color: '#64748b' }}>Password: admin123</span>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '8px'
+            }}
+          >
+            {DEMO_ROLES.map((r) => {
+              const isSelected = email.toLowerCase() === r.email.toLowerCase();
+              return (
+                <button
+                  key={r.email}
+                  type="button"
+                  onClick={() => handleSelectRole(r.email)}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: `1px solid ${isSelected ? r.borderColor : '#1e293b'}`,
+                    backgroundColor: isSelected ? `${r.borderColor}22` : '#131d31',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.borderColor = '#334155';
+                      e.currentTarget.style.backgroundColor = '#1e293b';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.borderColor = '#1e293b';
+                      e.currentTarget.style.backgroundColor = '#131d31';
+                    }
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <span style={{ fontSize: '11.5px', fontWeight: '700', color: r.color }}>
+                      {r.role}
+                    </span>
+                    {isSelected && (
+                      <span style={{ fontSize: '11px', color: r.color, fontWeight: '800' }}>✓</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
+                    {r.email}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '9.5px',
+                      color: isSelected ? r.color : '#64748b',
+                      marginTop: '3px',
+                      fontWeight: '600'
+                    }}
+                  >
+                    ● {r.badge}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

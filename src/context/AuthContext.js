@@ -93,15 +93,43 @@ export function AuthProvider({ children }) {
       }
 
       // 2. Resilient Offline Fallback (if backend is not running or network unreachable)
-      if (trimmedEmail === 'admin@threat.ai' && password === 'admin123') {
-        const userData = {
+      const fallbackUsers = {
+        'admin@threat.ai': {
           email: 'admin@threat.ai',
-          name: 'Security Ops',
-          role: 'Lead SOC Analyst',
-          initials: 'SO',
+          name: 'System Administrator',
+          role: 'Administrator',
+          initials: 'SA',
           department: 'Security Operations',
           clearance: 'TOP SECRET // SCI'
-        };
+        },
+        'manager@threat.ai': {
+          email: 'manager@threat.ai',
+          name: 'Security Manager',
+          role: 'Security Manager',
+          initials: 'SM',
+          department: 'Incident Response',
+          clearance: 'TOP SECRET // SCI'
+        },
+        'engineer@threat.ai': {
+          email: 'engineer@threat.ai',
+          name: 'SOC Lead Engineer',
+          role: 'SOC Engineer',
+          initials: 'SE',
+          department: 'SOC Engineering',
+          clearance: 'SECRET'
+        },
+        'analyst@threat.ai': {
+          email: 'analyst@threat.ai',
+          name: 'Security Analyst',
+          role: 'Security Analyst',
+          initials: 'SO',
+          department: 'Threat Triage',
+          clearance: 'SECRET'
+        }
+      };
+
+      if (fallbackUsers[trimmedEmail] && password === 'admin123') {
+        const userData = fallbackUsers[trimmedEmail];
         setUser(userData);
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
