@@ -59,3 +59,18 @@ class ContainmentResponse(BaseModel):
     score: int
     risk_level: str
     message: str
+
+
+class EmployeeCreate(BaseModel):
+    name: str
+    department: str
+    role: str
+    email: Optional[str] = None
+    workstation: Optional[str] = None
+    ip_address: Optional[str] = None
+    location: Optional[str] = "Headquarters / Remote"
+    status: Optional[str] = "Active"
+    risk_level: Optional[str] = "Low"
+    score: Optional[int] = 15
+    details: Optional[str] = None
+

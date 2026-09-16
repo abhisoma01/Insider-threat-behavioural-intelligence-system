@@ -12,7 +12,10 @@ import {
   ExternalLink,
   ShieldCheck,
   Lock,
-  Clock
+  Clock,
+  UserPlus,
+  X,
+  CheckCircle2
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import RiskBadge from '../components/common/RiskBadge';
@@ -20,7 +23,7 @@ import EmptyState from '../components/common/EmptyState';
 
 const ITEMS_PER_PAGE = 5;
 
-export default function EmployeesPage({ employees = [], isLoading = false, error = null }) {
+export default function EmployeesPage({ employees = [], isLoading = false, error = null, onAddEmployee }) {
   const { theme } = useTheme();
   const navigate = useNavigate();
 
@@ -39,6 +42,52 @@ export default function EmployeesPage({ employees = [], isLoading = false, error
 
   // Hover state
   const [hoveredRow, setHoveredRow] = useState(null);
+
+  // Add Employee Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+  const [formState, setFormState] = useState({
+    name: '',
+    department: 'Finance',
+    role: '',
+    workstation: '',
+    ip_address: '',
+    risk_level: 'Low',
+    score: 15
+  });
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    if (!formState.name.trim() || !formState.role.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      if (onAddEmployee) {
+        await onAddEmployee(formState);
+      }
+      showToast(`Identity "${formState.name}" successfully enrolled in threat monitoring.`);
+      setFormState({
+        name: '',
+        department: 'Finance',
+        role: '',
+        workstation: '',
+        ip_address: '',
+        risk_level: 'Low',
+        score: 15
+      });
+      setIsAddModalOpen(false);
+    } catch (err) {
+      showToast(`Failed to enroll employee: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   // Departments for dropdown
   const departments = useMemo(() => {
@@ -261,6 +310,30 @@ export default function EmployeesPage({ employees = [], isLoading = false, error
           >
             Total Monitored: <strong style={{ color: theme.textPrimary }}>{employees.length}</strong>
           </span>
+
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: theme.primary,
+              color: '#ffffff',
+              fontSize: '12.5px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(79, 70, 229, 0.35)',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+          >
+            <UserPlus size={14} />
+            <span>Add Monitored Identity</span>
+          </button>
         </div>
       </div>
 
@@ -780,6 +853,348 @@ export default function EmployeesPage({ employees = [], isLoading = false, error
           </>
         )}
       </div>
+
+      {/* ================================================= */}
+      {/* TOAST NOTIFICATION                                */}
+      {/* ================================================= */}
+      {toastMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '28px',
+            right: '28px',
+            zIndex: 1100,
+            backgroundColor: theme.surface,
+            border: `1px solid ${theme.border}`,
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)',
+            padding: '12px 18px',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            animation: 'slideUp 0.25s ease-out'
+          }}
+        >
+          <CheckCircle2 size={16} color="#10b981" />
+          <span style={{ fontSize: '13px', fontWeight: '600', color: theme.textPrimary }}>
+            {toastMessage}
+          </span>
+        </div>
+      )}
+
+      {/* ================================================= */}
+      {/* ENROLL MONITORED IDENTITY MODAL DIALOG            */}
+      {/* ================================================= */}
+      {isAddModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backdropFilter: 'blur(4px)',
+            padding: '20px',
+            boxSizing: 'border-box'
+          }}
+          onClick={() => !isSubmitting && setIsAddModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              backgroundColor: theme.surface,
+              borderRadius: '16px',
+              border: `1px solid ${theme.border}`,
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              padding: '28px',
+              boxSizing: 'border-box',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+              animation: 'scaleUp 0.2s ease-out'
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '10px',
+                    backgroundColor: theme.primaryContainer,
+                    color: theme.primary,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <UserPlus size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '800', color: theme.textPrimary }}>
+                    Enroll New Monitored Identity
+                  </h3>
+                  <span style={{ fontSize: '12px', color: theme.textSecondary }}>
+                    Adds workforce profile and initializes baseline behavioral telemetry.
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAddModalOpen(false)}
+                disabled={isSubmitting}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: theme.textSecondary,
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Full Name */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: theme.textPrimary, marginBottom: '6px' }}>
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Alex Morgan"
+                  value={formState.name}
+                  onChange={(e) => setFormState({ ...formState, name: e.target.value })}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: `1px solid ${theme.border}`,
+                    backgroundColor: theme.surfaceVariant,
+                    color: theme.textPrimary,
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              {/* Department & Role Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: theme.textPrimary, marginBottom: '6px' }}>
+                    Department *
+                  </label>
+                  <select
+                    value={formState.department}
+                    onChange={(e) => setFormState({ ...formState, department: e.target.value })}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: `1px solid ${theme.border}`,
+                      backgroundColor: theme.surfaceVariant,
+                      color: theme.textPrimary,
+                      fontSize: '13px',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value="Finance">Finance</option>
+                    <option value="Engineering">Engineering</option>
+                    <option value="Legal">Legal</option>
+                    <option value="DevOps">DevOps</option>
+                    <option value="HR">HR</option>
+                    <option value="Operations">Operations</option>
+                    <option value="Product">Product</option>
+                    <option value="Executive">Executive</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: theme.textPrimary, marginBottom: '6px' }}>
+                    Job Role *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Cloud Security Architect"
+                    value={formState.role}
+                    onChange={(e) => setFormState({ ...formState, role: e.target.value })}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: `1px solid ${theme.border}`,
+                      backgroundColor: theme.surfaceVariant,
+                      color: theme.textPrimary,
+                      fontSize: '13px',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Workstation & IP Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: theme.textPrimary, marginBottom: '6px' }}>
+                    Workstation ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. WS-FIN-502"
+                    value={formState.workstation}
+                    onChange={(e) => setFormState({ ...formState, workstation: e.target.value })}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: `1px solid ${theme.border}`,
+                      backgroundColor: theme.surfaceVariant,
+                      color: theme.textPrimary,
+                      fontSize: '13px',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: theme.textPrimary, marginBottom: '6px' }}>
+                    Assigned IP (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 192.168.4.150"
+                    value={formState.ip_address}
+                    onChange={(e) => setFormState({ ...formState, ip_address: e.target.value })}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: `1px solid ${theme.border}`,
+                      backgroundColor: theme.surfaceVariant,
+                      color: theme.textPrimary,
+                      fontSize: '13px',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Initial Risk Assessment */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: theme.textPrimary, marginBottom: '6px' }}>
+                    Initial Risk Level
+                  </label>
+                  <select
+                    value={formState.risk_level}
+                    onChange={(e) => {
+                      const lvl = e.target.value;
+                      const defaultScore = lvl === 'High' ? 80 : lvl === 'Medium' ? 55 : 15;
+                      setFormState({ ...formState, risk_level: lvl, score: defaultScore });
+                    }}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: `1px solid ${theme.border}`,
+                      backgroundColor: theme.surfaceVariant,
+                      color: theme.textPrimary,
+                      fontSize: '13px',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value="Low">Low Risk (Baseline Normal)</option>
+                    <option value="Medium">Medium Risk (Suspicious)</option>
+                    <option value="High">High Risk (Elevated Monitoring)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: theme.textPrimary, marginBottom: '6px' }}>
+                    Initial Threat Score (0–100)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formState.score}
+                    onChange={(e) => setFormState({ ...formState, score: parseInt(e.target.value, 10) || 0 })}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: `1px solid ${theme.border}`,
+                      backgroundColor: theme.surfaceVariant,
+                      color: theme.textPrimary,
+                      fontSize: '13px',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  disabled={isSubmitting}
+                  style={{
+                    padding: '9px 16px',
+                    borderRadius: '8px',
+                    border: `1px solid ${theme.border}`,
+                    backgroundColor: theme.surfaceVariant,
+                    color: theme.textSecondary,
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  style={{
+                    padding: '9px 18px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    backgroundColor: theme.primary,
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: isSubmitting ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <UserPlus size={14} />
+                  <span>{isSubmitting ? 'Enrolling...' : 'Enroll Identity'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

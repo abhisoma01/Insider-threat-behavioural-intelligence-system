@@ -78,6 +78,34 @@ def test_endpoints():
     assert admin_reset.status_code == 200
     print("[PASS] RBAC Check: Administrator authorized to reset employee score (HTTP 200 OK)")
 
+    # 4e. RBAC Check: Security Analyst denied from enrolling employee (403 Forbidden)
+    analyst_create_emp = client.post(
+        "/api/v1/employees",
+        headers={"Authorization": f"Bearer {analyst_token}"},
+        json={"name": "Alex Morgan", "department": "Finance", "role": "Financial Analyst"}
+    )
+    assert analyst_create_emp.status_code == 403, f"Expected 403 for analyst employee creation, got {analyst_create_emp.status_code}"
+    print("[PASS] RBAC Check: Analyst denied from creating employee (HTTP 403 Forbidden)")
+
+    # 4f. RBAC Check: Security Manager authorized to enroll employee (201 Created)
+    manager_create_emp = client.post(
+        "/api/v1/employees",
+        headers={"Authorization": f"Bearer {manager_token}"},
+        json={
+            "name": "Alex Morgan",
+            "department": "Engineering",
+            "role": "Cloud Security Architect",
+            "risk_level": "Low",
+            "score": 15
+        }
+    )
+    assert manager_create_emp.status_code == 201, f"Expected 201 for manager employee creation, got {manager_create_emp.status_code}: {manager_create_emp.text}"
+    created_emp_data = manager_create_emp.json()
+    assert created_emp_data["name"] == "Alex Morgan"
+    assert created_emp_data["department"] == "Engineering"
+    assert created_emp_data["score"] == 15
+    print(f"[PASS] POST /api/v1/employees (Enrolled new monitored identity #{created_emp_data['id']}: {created_emp_data['name']})")
+
     # 5. Strict RBAC Enforcement on Activity Ingestion (/activity/ingest)
     # 5a. Security Analyst MUST be denied (403 Forbidden)
     test_activity_payload = [

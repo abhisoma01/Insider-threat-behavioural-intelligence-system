@@ -298,6 +298,49 @@ function DashboardLayout() {
     }
   };
 
+  // Add Employee (Optimistic UI + Live Backend Persistence)
+  const handleAddEmployee = async (employeeData) => {
+    let created = null;
+    if (isBackendConnected) {
+      try {
+        created = await api.createEmployee(employeeData);
+      } catch (err) {
+        console.warn('Backend create employee fallback to local:', err);
+      }
+    }
+
+    if (!created) {
+      const allIds = employees.map((e) => parseInt(e.id, 10)).filter((n) => !isNaN(n));
+      const nextId = String(allIds.length > 0 ? Math.max(...allIds) + 1 : 101);
+      const initials = employeeData.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'ID';
+      created = {
+        id: nextId,
+        name: employeeData.name,
+        department: employeeData.department,
+        role: employeeData.role,
+        status: employeeData.status || 'Active',
+        email: employeeData.email || `${employeeData.name.toLowerCase().replace(/\s+/g, '.')}@threat.ai`,
+        workstation: employeeData.workstation || `WS-${employeeData.department.slice(0, 3).toUpperCase()}-${nextId}`,
+        ipAddress: employeeData.ip_address || employeeData.ipAddress || `192.168.4.${nextId}`,
+        location: employeeData.location || 'Headquarters / Remote',
+        riskLevel: employeeData.risk_level || employeeData.riskLevel || 'Low',
+        score: typeof employeeData.score === 'number' ? employeeData.score : 15,
+        lastActivity: 'Enrolled in continuous threat telemetry',
+        seen: 'Just now',
+        avatarBg: '#e8f0fe',
+        avatarColor: '#1a73e8',
+        initial: initials,
+        details: employeeData.details || 'New identity enrolled in insider threat monitoring.',
+        behavioralIndicators: ['Baseline Profile Established', 'Routine Access Hours'],
+        riskFactors: [{ name: 'Baseline Normal', score: 10, weight: 'Low' }],
+        securityEvents: []
+      };
+    }
+
+    setEmployees((prev) => [created, ...prev]);
+    return created;
+  };
+
   // Dynamic navigation items with active alert count and notification badges
   const unresolvedAlertsCount = alerts.filter((a) => a.status !== 'Resolved').length;
   const navItems = NAV_ITEMS.map((item) => {
@@ -809,6 +852,7 @@ function DashboardLayout() {
               employees={employees}
               isLoading={isLoadingEmployees}
               error={employeesError}
+              onAddEmployee={handleAddEmployee}
             />
           )
         )}

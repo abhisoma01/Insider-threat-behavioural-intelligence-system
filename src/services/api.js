@@ -176,6 +176,18 @@ export const api = {
   },
 
   /**
+   * Enrolls a new monitored identity into the threat intelligence platform.
+   * @param {object} employeeData
+   */
+  createEmployee: async (employeeData) => {
+    const data = await request('/api/v1/employees', {
+      method: 'POST',
+      body: employeeData
+    });
+    return normalizeEmployee(data);
+  },
+
+  /**
    * Dispatches containment directive isolating credentials and terminating active sessions.
    * @param {string} id
    */
