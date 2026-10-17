@@ -1,26 +1,15 @@
+import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
-from app.config import settings
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
 
-connect_args = {}
-if settings.DATABASE_URL.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
+# Pull the database URL from Vercel, fallback to local SQLite if running locally
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./threat_intel.db")
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args=connect_args,
-    echo=False
-)
+# Fix the URL prefix if SQLAlchemy requires postgresql:// instead of postgres://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 Base = declarative_base()
-
-
-def get_db():
-    """Dependency that provides a database session per request."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
